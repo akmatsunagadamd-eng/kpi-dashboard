@@ -495,4 +495,34 @@ async function loadLive(){
     DATA=recs;
     $("banner").style.display="none";
     const nLink=DATA.filter(r=>r.link).length;
-    $("srcNote").innerHTML=`データ元: <a href="${SHEET_URL}" target="_blank">Googleスプレッドシート</a>（${new Date().toLocaleString("ja-JP")} 取得・${DATA.
+    $("srcNote").innerHTML=`データ元: <a href="${SHEET_URL}" target="_blank">Googleスプレッドシート</a>（${new Date().toLocaleString("ja-JP")} 取得・${DATA.length}件・${mode}${nLink?`・リンク${nLink}件`:""}）`;
+  }else{
+    $("banner").style.display="block";
+    $("banner").textContent="⚠ スプレッドシートに接続できないため、2026/07/07時点の保存データを表示しています。ネット接続とシートの共有設定（リンクを知っている全員が閲覧可）を確認し、「最新データに更新」を押してください。";
+    $("srcNote").textContent="オフラインデータ表示中（2026/07/07 時点）";
+  }
+  fillFilters(); render();
+}
+
+/* ================= CSV出力 ================= */
+function exportCsv(){
+  const R=filtered();
+  const head=["受付日","ステータス","進捗詳細","車種","製品","症状","発生時期","実工数h","代品費用計","報告者","内容","リンク"];
+  const lines=[head].concat(R.map(r=>[r.dateStr,r.st,r.stRaw,r.car,r.prodRaw||r.prod,r.syms.join("、"),r.when,r.hours||"",r.cost||"",r.name,r.note,r.link]));
+  const csv="\ufeff"+lines.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\r\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="不具合報告_集計_"+new Date().toISOString().slice(0,10)+".csv";
+  a.click();
+}
+
+/* ================= 初期化 ================= */
+["fFrom","fTo","fStatus","fCar","fProd","fSym"].forEach(id=>$(id).addEventListener("change",render));
+$("fText").addEventListener("input",()=>render());
+$("btnReset").addEventListener("click",()=>{["fFrom","fTo","fStatus","fCar","fProd","fSym"].forEach(id=>$(id).value="");$("fText").value="";render();});
+$("btnReload").addEventListener("click",loadLive);
+$("btnCsv").addEventListener("click",exportCsv);
+fillFilters(); render(); loadLive();
+</script>
+</body>
+</html>
