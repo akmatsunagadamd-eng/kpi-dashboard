@@ -107,7 +107,7 @@ td a:hover{text-decoration:underline;}
     <h3>報告明細 <span class="count-note" id="tblCount"></span></h3>
     <div style="max-height:480px;overflow:auto;">
       <table>
-        <thead><tr><th>受付日</th><th>ステータス</th><th>車種</th><th>製品</th><th>症状</th><th>発生時期</th><th class="num">工数h</th><th class="num">代品費用</th><th>報告者</th><th>内容</th></tr></thead>
+        <thead><tr><th>受付日</th><th>ステータス</th><th>車種</th><th>製品</th><th>症状</th><th>発生時期</th><th class="num">工数h</th><th class="num">代品費用</th><th>報告者</th><th>内容</th><th>写真</th></tr></thead>
         <tbody id="tblBody"></tbody>
       </table>
     </div>
@@ -309,11 +309,12 @@ function splitSyms(s){
 }
 
 /* CSV/xlsx行 → レコード */
-function rowToRec(r, link){
+function rowToRec(r, link, extraPhotos){
   const get=i=>(r[i]||"").trim();
-  return makeRec(get(0),get(1),get(2),get(3),get(4),[get(5),get(6)].filter(Boolean).join(" / "),get(9),get(12),get(18),get(17),get(20),get(23),get(24),link||"");
+  const photos=[...new Set(((r[21]||"").match(/https?:\/\/[^\s"']+/g)||[]).concat(extraPhotos||[]))];
+  return makeRec(get(0),get(1),get(2),get(3),get(4),[get(5),get(6)].filter(Boolean).join(" / "),get(9),get(12),get(18),get(17),get(20),get(23),get(24),link||"",photos);
 }
-function makeRec(d,f,c,h,st,nm,car,prod,sym,when,note,cost,ship,link){
+function makeRec(d,f,c,h,st,nm,car,prod,sym,when,note,cost,ship,link,photos){
   const date=parseDate(d);
   return {
     date, dateStr:(d||"").split(" ")[0],
@@ -326,7 +327,7 @@ function makeRec(d,f,c,h,st,nm,car,prod,sym,when,note,cost,ship,link){
     syms: splitSyms(sym), when:(when||"").replace(/\s+/g," ").trim(),
     note:(note||"").replace(/\s+/g," ").trim(),
     cost: money(cost)+money(ship),
-    link: link||""
+    link: link||"", photos: photos||[]
   };
 }
 
@@ -451,6 +452,7 @@ function render(){
     <td class="num">${r.cost?yen(r.cost):"–"}</td>
     <td>${esc(r.name)}</td>
     <td class="note-cell" title="${esc(r.note)}">${esc(r.note)}</td>
+    <td style="white-space:nowrap">${r.photos.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener">📷${i+1}</a>`).join(" ")}</td>
   </tr>`).join("");
   $("tblCount").textContent=`${rows.length} 件`;
 }
@@ -474,7 +476,8 @@ async function loadXlsx(){
     if(!row.some(c=>(c||"").trim()!=="")) continue;
     const a=ws[XLSX.utils.encode_cell({r:R,c:0})];
     const link=(a&&a.l&&a.l.Target)||"";
-    recs.push(rowToRec(row,link));
+    const p=ws[XLSX.utils.encode_cell({r:R,c:21})];
+    recs.push(rowToRec(row,link,(p&&p.l&&p.l.Target)?[p.l.Target]:[]));
   }
   return recs;
 }
@@ -494,7 +497,7 @@ async function loadLive(){
   if(recs && recs.length>=3){
     DATA=recs;
     $("banner").style.display="none";
-    const nLink=DATA.filter(r=>r.link).length;
+    const nLink=DATA.filter(r=>r.link||r.photos.length).length;
     $("srcNote").innerHTML=`データ元: <a href="${SHEET_URL}" target="_blank">Googleスプレッドシート</a>（${new Date().toLocaleString("ja-JP")} 取得・${DATA.length}件・${mode}${nLink?`・リンク${nLink}件`:""}）`;
   }else{
     $("banner").style.display="block";
@@ -507,8 +510,8 @@ async function loadLive(){
 /* ================= CSV出力 ================= */
 function exportCsv(){
   const R=filtered();
-  const head=["受付日","ステータス","進捗詳細","車種","製品","症状","発生時期","実工数h","代品費用計","報告者","内容","リンク"];
-  const lines=[head].concat(R.map(r=>[r.dateStr,r.st,r.stRaw,r.car,r.prodRaw||r.prod,r.syms.join("、"),r.when,r.hours||"",r.cost||"",r.name,r.note,r.link]));
+  const head=["受付日","ステータス","進捗詳細","車種","製品","症状","発生時期","実工数h","代品費用計","報告者","内容","リンク","写真URL"];
+  const lines=[head].concat(R.map(r=>[r.dateStr,r.st,r.stRaw,r.car,r.prodRaw||r.prod,r.syms.join("、"),r.when,r.hours||"",r.cost||"",r.name,r.note,r.link,r.photos.join(" ")]));
   const csv="\ufeff"+lines.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
