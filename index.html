@@ -144,7 +144,7 @@ td a:hover{text-decoration:underline;}
     <h3>報告明細 <span class="count-note" id="tblCount"></span></h3>
     <div style="max-height:480px;overflow:auto;">
       <table class="data">
-        <thead><tr><th>受付日</th><th>ステータス</th><th>車種</th><th>製品</th><th>症状</th><th>発生時期</th><th class="num">工数h</th><th class="num">費用計</th><th>報告者</th><th>内容</th><th>写真</th></tr></thead>
+        <thead><tr><th></th><th>受付日</th><th>ステータス</th><th>車種</th><th>製品</th><th>症状</th><th>代品</th><th>発生時期</th><th class="num">工数h</th><th class="num">費用計</th><th>報告者</th><th>内容</th><th>写真</th></tr></thead>
         <tbody id="tblBody"></tbody>
       </table>
     </div>
@@ -171,7 +171,7 @@ td a:hover{text-decoration:underline;}
     <h3>案件一覧 <span class="count-note" id="cCount"></span></h3>
     <div style="max-height:560px;overflow:auto;">
       <table class="data">
-        <thead><tr><th></th><th>受付日</th><th>製造業者</th><th>車種</th><th>製品</th><th>報告者</th><th>症状</th><th class="num">製品代</th><th class="num">送料</th><th class="num">工賃</th><th class="num">社内工数</th><th class="num">交通費</th><th class="num">合計</th><th>状態</th></tr></thead>
+        <thead><tr><th></th><th>受付日</th><th>製造業者</th><th>車種</th><th>製品</th><th>報告者</th><th>症状</th><th>代品</th><th class="num">製品代</th><th class="num">送料</th><th class="num">工賃</th><th class="num">社内工数</th><th class="num">交通費</th><th class="num">合計</th><th>状態</th></tr></thead>
         <tbody id="costBody"></tbody>
       </table>
     </div>
@@ -246,6 +246,17 @@ td a:hover{text-decoration:underline;}
       <div><label>製造業者（請求先）</label><select id="mMaker"></select></div>
       <div><label>請求状態</label><select id="mState"><option>未請求</option><option>請求済</option><option>対象外</option></select></div>
     </div>
+    <div class="sec-h">対応ステータス（報告明細の進捗を上書き）</div>
+    <div class="fgrid">
+      <div><label>ステータス</label><select id="mStatus2"><option value="">シート値のまま</option><option>未対応</option><option>対応中</option><option>保留</option><option>完了</option></select></div>
+      <div><label>シート記載の進捗（参考）</label><input id="mStSheet" disabled></div>
+    </div>
+    <div class="sec-h">代品として出したもの（製品・部品）</div>
+    <table class="int-table">
+      <thead><tr><th>品名（製品・部品名）</th><th style="width:150px">部品番号</th><th style="width:70px">数量</th><th style="width:200px">備考</th><th style="width:30px"></th></tr></thead>
+      <tbody id="mItemBody"></tbody>
+    </table>
+    <button class="btn light sm" id="mAddItem" style="margin-top:6px">＋ 代品を追加</button>
     <div class="sec-h">① 代品費用</div>
     <div class="fgrid">
       <div><label>製品代（円）</label><input type="number" id="mProduct" min="0"></div>
@@ -275,7 +286,7 @@ td a:hover{text-decoration:underline;}
     </div>
     <div class="total-bar" id="mTotals"></div>
     <div class="btnrow">
-      <button class="btn danger" id="mDelete">この案件の費用を削除</button>
+      <button class="btn danger" id="mDelete">この案件の入力を削除</button>
       <span style="flex:1"></span>
       <button class="btn light" id="mCancel">キャンセル</button>
       <button class="btn" id="mSave">保存</button>
@@ -551,6 +562,8 @@ function resolveMaker(r){
   }
   return "";
 }
+function effSt(r){ const c=COSTS[r.cid]; return (c&&c.stOverride)||r.st; }
+function itemsStr(r){ const c=COSTS[r.cid]; return ((c&&c.items)||[]).map(i=>(i.name||"")+(i.part?`(${i.part})`:"")+((+i.qty||1)>1?`×${i.qty}`:"")).join("、"); }
 function caseState(r){
   const c=COSTS[r.cid];
   if(!c||!hasCost(c)) return "未入力";
@@ -565,7 +578,7 @@ function fillFilters(){
   $("fTo").innerHTML=opt("","最新まで")+months.map(m=>opt(m)).join("");
   $("bFrom").innerHTML=opt("","最初から")+months.map(m=>opt(m)).join("");
   $("bTo").innerHTML=opt("","最新まで")+months.map(m=>opt(m)).join("");
-  const sts=["未対応","対応中","保留","完了","その他","未設定"].filter(s=>DATA.some(r=>r.st===s));
+  const sts=["未対応","対応中","保留","完了","その他","未設定"].filter(s=>DATA.some(r=>effSt(r)===s));
   $("fStatus").innerHTML=opt("","すべて")+sts.map(s=>opt(s)).join("");
   const cars=[...new Set(DATA.map(r=>r.car))].sort((a,b)=>a.localeCompare(b,"ja"));
   $("fCar").innerHTML=opt("","すべて")+cars.map(c=>opt(c)).join("");
@@ -584,7 +597,7 @@ function filtered(){
     if(from && r.month && r.month<from) return false;
     if(to && r.month && r.month>to) return false;
     if((from||to) && !r.month) return false;
-    if(st && r.st!==st) return false;
+    if(st && effSt(r)!==st) return false;
     if(car && r.car!==car) return false;
     if(prod && r.prod!==prod) return false;
     if(sym && !r.syms.includes(sym)) return false;
@@ -597,7 +610,7 @@ function filtered(){
 }
 function render(){
   const R=filtered();
-  const bySt=count(R.map(r=>r.st));
+  const bySt=count(R.map(r=>effSt(r)));
   const open=(bySt["未対応"]||0)+(bySt["対応中"]||0)+(bySt["保留"]||0);
   const done=bySt["完了"]||0;
   const hours=R.reduce((s,r)=>s+r.hours,0);
@@ -622,7 +635,7 @@ function render(){
   const months=[...new Set(R.map(r=>r.month).filter(Boolean))].sort();
   const stGroups=[["完了","#10b981"],["対応中","#f59e0b"],["保留","#8b5cf6"],["未対応","#ef4444"],["その他","#94a3b8"],["未設定","#cbd5e1"]];
   mkChart("cMonth",{type:"bar",
-    data:{labels:months,datasets:stGroups.filter(([g])=>R.some(r=>r.st===g)).map(([g,c])=>({label:g,backgroundColor:c,data:months.map(m=>R.filter(r=>r.month===m&&r.st===g).length),stack:"s"}))},
+    data:{labels:months,datasets:stGroups.filter(([g])=>R.some(r=>effSt(r)===g)).map(([g,c])=>({label:g,backgroundColor:c,data:months.map(m=>R.filter(r=>r.month===m&&effSt(r)===g).length),stack:"s"}))},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom",labels:{boxWidth:12,font:{size:11}}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});
   const stKeys=stGroups.map(g=>g[0]).filter(g=>bySt[g]);
   mkChart("cStatus",{type:"doughnut",
@@ -649,12 +662,15 @@ function render(){
   $("tblBody").innerHTML=rows.map(r=>{
     const t=costTotal(COSTS[r.cid]);
     const disp=t&&t.sum>0? yen(t.sum) : (r.sheetProduct+r.sheetShip>0? yen(r.sheetProduct+r.sheetShip)+"※" : "–");
+    const se=effSt(r), ov=COSTS[r.cid]&&COSTS[r.cid].stOverride;
     return `<tr>
+    <td><button class="btn light sm" onclick="openCostModal('${esc(r.cid).replace(/'/g,"\\'")}')">✎</button></td>
     <td style="white-space:nowrap">${esc(r.dateStr)||"–"}</td>
-    <td><span class="st ${stCls[r.st]}" title="${esc(r.stRaw)}">${r.st}</span></td>
+    <td><span class="st ${stCls[se]||"na"}" title="${ov?`システムで上書き（シート値: ${esc(r.stRaw)}）`:esc(r.stRaw)}">${se}${ov?" ✎":""}</span></td>
     <td>${esc(r.car)}</td>
     <td title="${esc(r.prodRaw)}">${esc(r.prod)}</td>
     <td>${esc(r.syms.join("、"))}</td>
+    <td>${esc(itemsStr(r))||"–"}</td>
     <td>${esc(r.when)||"–"}</td>
     <td class="num">${r.hours||"–"}</td>
     <td class="num" title="※はシート記載値">${disp}</td>
@@ -698,6 +714,7 @@ function renderCost(){
     <td title="${esc(r.prodRaw)}">${esc(r.prod)}</td>
     <td>${esc(r.name)}</td>
     <td>${esc(r.syms.join("、"))}</td>
+    <td>${esc(itemsStr(r))||"–"}</td>
     <td class="num">${t&&t.product?yen(t.product):"–"}</td>
     <td class="num">${t&&t.ship?yen(t.ship):"–"}</td>
     <td class="num">${t&&t.labor?yen(t.labor):"–"}</td>
@@ -710,7 +727,7 @@ function renderCost(){
 }
 
 /* ================= 費用入力モーダル ================= */
-let curCid=null, curInternal=[];
+let curCid=null, curInternal=[], curItems=[];
 function makerOptions(sel){
   const mk=[...new Set([...(SETTINGS.makers||[]), ...(SETTINGS.prodMap||[]).map(m=>m.maker)])].filter(Boolean).sort((a,b)=>a.localeCompare(b,"ja"));
   return `<option value="">（未指定＝自動判定）</option>`+mk.map(m=>`<option ${m===sel?"selected":""}>${esc(m)}</option>`).join("");
@@ -720,6 +737,7 @@ function openCostModal(cid){
   curCid=cid;
   const c=COSTS[cid]||emptyCost();
   curInternal=JSON.parse(JSON.stringify(c.internal||[]));
+  curItems=JSON.parse(JSON.stringify(c.items||[]));
   $("mMeta").innerHTML=`<b>${esc(r.dateStr)}</b>｜${esc(r.car)}｜${esc(r.prodRaw||r.prod)}｜報告者: ${esc(r.name)}<br>症状: ${esc(r.syms.join("、"))}　${esc(r.note).slice(0,120)}<br>自動判定の製造業者: <b>${esc(resolveMaker(r)||"未割当")}</b>／シート記載: 代品費用 ${yen(r.sheetProduct)}・送料 ${yen(r.sheetShip)}`;
   $("mMaker").innerHTML=makerOptions(c.maker);
   $("mState").value=c.status||"未請求";
@@ -731,7 +749,9 @@ function openCostModal(cid){
   $("mLaborCust").value=c.laborCust||"";
   $("mOther").value=c.other||"";
   $("mMemo").value=c.memo||"";
-  renderIntRows(); updateTotals();
+  $("mStatus2").value=c.stOverride||"";
+  $("mStSheet").value=r.stRaw||r.st;
+  renderIntRows(); renderItemRows(); updateTotals();
   $("modalBg").style.display="block";
 }
 function renderIntRows(){
@@ -748,6 +768,15 @@ function renderIntRows(){
     <td><span class="del-x" data-del="${i}">✕</span></td>
   </tr>`).join("");
 }
+function renderItemRows(){
+  $("mItemBody").innerHTML=curItems.map((row,i)=>`<tr>
+    <td><input data-i="${i}" data-f="name" value="${esc(row.name||"")}" placeholder="例: ウインカーレンズ左"></td>
+    <td><input data-i="${i}" data-f="part" value="${esc(row.part||"")}" placeholder="例: E-653"></td>
+    <td><input type="number" min="0" data-i="${i}" data-f="qty" value="${row.qty??1}"></td>
+    <td><input data-i="${i}" data-f="note" value="${esc(row.note||"")}"></td>
+    <td><span class="del-x" data-del="${i}">✕</span></td>
+  </tr>`).join("");
+}
 function collectModal(){
   const c=COSTS[curCid]||emptyCost();
   return Object.assign({},c,{
@@ -755,7 +784,9 @@ function collectModal(){
     product:+$("mProduct").value||0, shipOut:+$("mShipOut").value||0, shipBack:+$("mShipBack").value||0,
     laborExch:+$("mLaborExch").value||0, laborInst:+$("mLaborInst").value||0, laborCust:+$("mLaborCust").value||0,
     other:+$("mOther").value||0, memo:$("mMemo").value.trim(),
-    internal:curInternal.filter(r=>(+r.hours||0)||(+r.gas||0)||(+r.toll||0)||(+r.train||0))
+    internal:curInternal.filter(r=>(+r.hours||0)||(+r.gas||0)||(+r.toll||0)||(+r.train||0)),
+    stOverride:$("mStatus2").value,
+    items:curItems.filter(r=>(r.name||"").trim()||(r.part||"").trim())
   });
 }
 function updateTotals(){
@@ -829,15 +860,15 @@ function invoiceXlsx(maker){
   const ws1=XLSX.utils.aoa_to_sheet(cover);
   ws1["!cols"]=[{wch:34},{wch:16}];
   XLSX.utils.book_append_sheet(wb, ws1, "請求書");
-  const head=["受付日","車種","製品","報告者","症状","製品代","発送送料","返送送料","交換工賃","取付工賃","客先工賃","社内工数（内訳）","社内工数費","交通費","その他実費","合計","備考"];
+  const head=["受付日","車種","製品","報告者","症状","代品（品名/部品番号）","製品代","発送送料","返送送料","交換工賃","取付工賃","客先工賃","社内工数（内訳）","社内工数費","交通費","その他実費","合計","備考"];
   const rows=items.map(x=>{
     const c=COSTS[x.r.cid];
     const det=(c.internal||[]).map(i=>`${i.kind||""} ${i.role||""} ${i.hours||0}h×${i.rate||0}円`).join(" / ");
-    return [x.r.dateStr, x.r.car, x.r.prodRaw||x.r.prod, x.r.name, x.r.syms.join("、"),
+    return [x.r.dateStr, x.r.car, x.r.prodRaw||x.r.prod, x.r.name, x.r.syms.join("、"), itemsStr(x.r),
       +c.product||0, +c.shipOut||0, +c.shipBack||0, +c.laborExch||0, +c.laborInst||0, +c.laborCust||0,
       det, x.t.internal, x.t.trans, x.t.other, x.t.sum, c.memo||""];
   });
-  rows.push(["合計","","","","",s.product,"","","","","","",s.internal,s.trans,s.other,s.sum,""]);
+  rows.push(["合計","","","","","",s.product,"","","","","","",s.internal,s.trans,s.other,s.sum,""]);
   const ws2=XLSX.utils.aoa_to_sheet([head,...rows]);
   ws2["!cols"]=head.map((h,i)=>({wch:i===2||i===11?26:(i===4||i===16?18:12)}));
   XLSX.utils.book_append_sheet(wb, ws2, "明細");
@@ -902,10 +933,10 @@ function importJson(text){
 /* ================= CSV出力（案件明細） ================= */
 function exportCsv(){
   const R=filtered();
-  const head=["受付日","ステータス","進捗詳細","製造業者","車種","製品","症状","発生時期","実工数h","製品代","送料","工賃","社内工数","交通費","その他","費用合計","請求状態","報告者","内容","写真URL"];
+  const head=["受付日","ステータス","進捗詳細","製造業者","車種","製品","症状","代品明細","発生時期","実工数h","製品代","送料","工賃","社内工数","交通費","その他","費用合計","請求状態","報告者","内容","写真URL"];
   const lines=[head].concat(R.map(r=>{
     const t=costTotal(COSTS[r.cid])||{product:0,ship:0,labor:0,internal:0,trans:0,other:0,sum:0};
-    return [r.dateStr,r.st,r.stRaw,resolveMaker(r),r.car,r.prodRaw||r.prod,r.syms.join("、"),r.when,r.hours||"",t.product||"",t.ship||"",t.labor||"",t.internal||"",t.trans||"",t.other||"",t.sum||"",caseState(r),r.name,r.note,r.photos.join(" ")];
+    return [r.dateStr,effSt(r),r.stRaw,resolveMaker(r),r.car,r.prodRaw||r.prod,r.syms.join("、"),itemsStr(r),r.when,r.hours||"",t.product||"",t.ship||"",t.labor||"",t.internal||"",t.trans||"",t.other||"",t.sum||"",caseState(r),r.name,r.note,r.photos.join(" ")];
   }));
   const csv="﻿"+lines.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const a=document.createElement("a");
@@ -943,6 +974,9 @@ $("btnImportJson").addEventListener("click",()=>$("jsonInput").click());
 $("jsonInput").addEventListener("change",async e=>{const f=e.target.files[0];if(f)importJson(await f.text());e.target.value="";});
 $("btnWipeCosts").addEventListener("click",()=>{if(confirm("費用データ（全案件の入力内容）を消去しますか？設定は残ります。")){COSTS={};saveCosts();renderAll();}});
 /* モーダル */
+$("mAddItem").addEventListener("click",()=>{curItems.push({name:"",part:"",qty:1,note:""});renderItemRows();});
+$("mItemBody").addEventListener("input",e=>{const i=+e.target.dataset.i,f=e.target.dataset.f;if(f===undefined||isNaN(i))return;curItems[i][f]=e.target.value;});
+$("mItemBody").addEventListener("click",e=>{const d=e.target.dataset.del;if(d!==undefined){curItems.splice(+d,1);renderItemRows();}});
 $("mAddInt").addEventListener("click",()=>{const roles=Object.keys(SETTINGS.rates);const role=roles[0]||"";curInternal.push({kind:"検品対応",role,hours:"",rate:SETTINGS.rates[role]||0,gas:"",toll:"",train:""});renderIntRows();updateTotals();});
 $("mIntBody").addEventListener("input",e=>{
   const el=e.target, i=+el.dataset.i, f=el.dataset.f;
@@ -959,7 +993,7 @@ $("mIntBody").addEventListener("click",e=>{const d=e.target.dataset.del;if(d!==u
 $("mPrefill").addEventListener("click",()=>{const r=DATA.find(x=>x.cid===curCid);if(!r)return;if(r.sheetProduct)$("mProduct").value=r.sheetProduct;if(r.sheetShip)$("mShipOut").value=r.sheetShip;updateTotals();});
 $("mSave").addEventListener("click",()=>{COSTS[curCid]=collectModal();saveCosts();closeModal();renderAll();});
 $("mCancel").addEventListener("click",closeModal);
-$("mDelete").addEventListener("click",()=>{if(confirm("この案件の費用入力を削除しますか？")){delete COSTS[curCid];saveCosts();closeModal();renderAll();}});
+$("mDelete").addEventListener("click",()=>{if(confirm("この案件の入力（費用・代品・ステータス上書き）を削除しますか？")){delete COSTS[curCid];saveCosts();closeModal();renderAll();}});
 $("modalBg").addEventListener("click",e=>{if(e.target===$("modalBg"))closeModal();});
 /* 設定の編集反映 */
 ["rateTable","makerTable","mapTable"].forEach(id=>{
