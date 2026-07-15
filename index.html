@@ -94,7 +94,8 @@ td a:hover{text-decoration:underline;}
   <span class="src-note" id="srcNote">データ未読込</span>
   <button class="btn light" id="btnCsv">CSV出力</button>
   <button class="btn light" id="btnClear">案件データ消去</button>
-  <button class="btn" id="btnLoad">📂 案件データ読込（xlsx/CSV）</button>
+  <button class="btn" id="btnSheet">🌐 シートから取得</button>
+  <button class="btn light" id="btnLoad">📂 ファイル読込（xlsx/CSV）</button>
   <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.tsv" style="display:none">
   <input type="file" id="jsonInput" accept=".json" style="display:none">
 </div>
@@ -285,6 +286,9 @@ td a:hover{text-decoration:underline;}
 <script>
 /* データはローカルで読み込んだファイルのみ使用。外部への通信は一切行いません。 */
 const STORE_KEY="kpi-dashboard-data";
+const SHEET_ID="1feXErMniOssFEYW54mwlF5vyanAkPtm-tuxVe3X8ehA";
+const SHEET_XLSX=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=xlsx`;
+const SHEET_CSV=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=0`;
 const COST_KEY="kpi-dashboard-costs";
 const SET_KEY="kpi-dashboard-settings";
 
@@ -484,6 +488,38 @@ function restore(){
     }
   }catch(e){}
   return false;
+}
+
+/* ================= スプレッドシートからのオンライン取得 ================= */
+async function loadFromSheet(silent){
+  $("srcNote").textContent="スプレッドシート読込中…";
+  try{
+    const res=await fetch(SHEET_XLSX,{cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const tuples=tuplesFromXlsx(await res.arrayBuffer());
+    if(tuples.length<1) throw new Error("empty");
+    applyTuples(tuples,"Googleスプレッドシート（自動取得）");
+    return true;
+  }catch(e1){
+    try{
+      const res=await fetch(SHEET_CSV,{cache:"no-store"});
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      const tuples=tuplesFromCsv(await res.text());
+      if(tuples.length<1) throw new Error("empty");
+      applyTuples(tuples,"Googleスプレッドシート（CSV・リンクなし）");
+      return true;
+    }catch(e2){
+      if(!silent) alert("スプレッドシートに接続できませんでした。ネット接続と共有設定を確認してください。\n"+e2.message);
+      if(DATA.length){
+        $("srcNote").textContent=`オフライン（保存済み ${DATA.length} 件を表示中）`;
+      }else{
+        $("srcNote").textContent="データ未読込";
+        $("banner").style.display="block";
+        $("banner").textContent="スプレッドシートに接続できませんでした。「シートから取得」で再試行するか、xlsx/CSVファイルを読み込んでください。";
+      }
+      return false;
+    }
+  }
 }
 
 /* ================= 費用・設定データ ================= */
@@ -895,6 +931,7 @@ $("btnReset").addEventListener("click",()=>{["fFrom","fTo","fStatus","fCar","fPr
 ["cfMaker","cfState"].forEach(id=>$(id).addEventListener("change",renderCost));
 $("cfText").addEventListener("input",renderCost);
 ["bFrom","bTo","bState"].forEach(id=>$(id).addEventListener("change",renderBill));
+$("btnSheet").addEventListener("click",()=>loadFromSheet(false));
 $("btnLoad").addEventListener("click",()=>$("fileInput").click());
 $("fileInput").addEventListener("change",e=>{handleFile(e.target.files[0]);e.target.value="";});
 window.addEventListener("dragover",e=>e.preventDefault());
@@ -939,12 +976,9 @@ $("addMaker").addEventListener("click",()=>{SETTINGS.makers.push("");renderSetti
 $("addMap").addEventListener("click",()=>{SETTINGS.prodMap.push({kw:"",maker:""});renderSettings();});
 
 loadCostData();
-if(!restore()){
-  $("banner").style.display="block";
-  $("banner").textContent="案件データ未読込です。Googleスプレッドシートから「ファイル → ダウンロード → Microsoft Excel (.xlsx)」で保存し、「案件データ読込」ボタンから選択するか、この画面にドラッグ＆ドロップしてください。データはこのブラウザ内にのみ保存され、外部には送信されません。";
-  $("srcNote").textContent="データ未読込";
-}
+restore();
 renderAll();
+loadFromSheet(true); /* 起動時にスプレッドシートから自動取得（失敗時は保存データ/ファイル読込で継続） */
 </script>
 </body>
 </html>
