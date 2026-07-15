@@ -228,6 +228,14 @@ td a:hover{text-decoration:underline;}
     <button class="btn light sm" id="addMap">＋ 行を追加</button>
   </div>
   <div class="panel">
+    <h3>スプレッドシートへの書き戻し（Apps Script連携）</h3>
+    <div class="muted" style="margin-bottom:8px">設定すると、案件編集の保存時にステータスを「進捗」列へ、代品明細をZ列へ自動反映します。シート側で一度だけApps Scriptウェブアプリのデプロイが必要です（配布の「シート書き戻し設定手順」参照）。空欄の場合は書き戻しを行いません（ローカル保存のみ）。</div>
+    <div class="fgrid">
+      <div style="grid-column:span 2"><label>ウェブアプリURL（https://script.google.com/macros/s/…/exec）</label><input id="setGasUrl" placeholder="未設定（書き戻し無効）"></div>
+      <div><label>共有キー（Apps Script側のTOKENと同じ値）</label><input id="setGasToken"></div>
+    </div>
+  </div>
+  <div class="panel">
     <h3>費用データの保存・共有</h3>
     <div class="muted" style="margin-bottom:8px">費用データ・設定はこのブラウザ内に自動保存されます。他のPCと共有する場合やバックアップにはJSONファイルを使ってください（案件データのxlsxとは別ファイルです）。</div>
     <button class="btn" id="btnExportJson">💾 費用データを書き出し（JSON）</button>
@@ -404,12 +412,12 @@ function splitSyms(s){
 }
 
 /* CSV/xlsx行 → タプル */
-function rowToTuple(r, link, extraPhotos){
+function rowToTuple(r, link, extraPhotos, rowNum){
   const get=i=>(r[i]||"").trim();
   const photos=[...new Set(((r[21]||"").match(/https?:\/\/[^\s"']+/g)||[]).concat(extraPhotos||[]))];
-  return [get(0),get(1),get(2),get(3),get(4),[get(5),get(6)].filter(Boolean).join(" / "),get(9),get(12),get(18),get(17),get(20),get(23),get(24),link||"",photos];
+  return [get(0),get(1),get(2),get(3),get(4),[get(5),get(6)].filter(Boolean).join(" / "),get(9),get(12),get(18),get(17),get(20),get(23),get(24),link||"",photos,rowNum||0];
 }
-function makeRec(d,f,c,h,st,nm,car,prod,sym,when,note,cost,ship,link,photos){
+function makeRec(d,f,c,h,st,nm,car,prod,sym,when,note,cost,ship,link,photos,rowNum){
   const date=parseDate(d);
   return {
     date, dateStr:(d||"").split(" ")[0],
@@ -422,7 +430,7 @@ function makeRec(d,f,c,h,st,nm,car,prod,sym,when,note,cost,ship,link,photos){
     syms: splitSyms(sym), when:(when||"").replace(/\s+/g," ").trim(),
     note:(note||"").replace(/\s+/g," ").trim(),
     sheetProduct: money(cost), sheetShip: money(ship),
-    photos: photos||[]
+    photos: photos||[], rowNum: rowNum||0, tsRaw:(d||"").trim()
   };
 }
 
@@ -463,12 +471,12 @@ function tuplesFromXlsx(buf){
     if(isHeaderOrEmpty(row)) continue;
     const a=ws[XLSX.utils.encode_cell({r:R,c:0})];
     const p=ws[XLSX.utils.encode_cell({r:R,c:21})];
-    tuples.push(rowToTuple(row,(a&&a.l&&a.l.Target)||"",(p&&p.l&&p.l.Target)?[p.l.Target]:[]));
+    tuples.push(rowToTuple(row,(a&&a.l&&a.l.Target)||"",(p&&p.l&&p.l.Target)?[p.l.Target]:[],R+1));
   }
   return tuples;
 }
 function tuplesFromCsv(text){
-  return parseCSV(text).filter(r=>r.length>4).filter(r=>!isHeaderOrEmpty(r)).map(r=>rowToTuple(r,"",[]));
+  return parseCSV(text).map((r,i)=>({r,row:i+1})).filter(x=>x.r.length>4&&!isHeaderOrEmpty(x.r)).map(x=>rowToTuple(x.r,"",[],x.row));
 }
 function applyTuples(tuples, srcName){
   if(!tuples.length){ alert("データを読み取れませんでした。ファイル形式をご確認ください。"); return; }
@@ -530,6 +538,28 @@ async function loadFromSheet(silent){
       }
       return false;
     }
+  }
+}
+
+/* ================= スプレッドシートへの書き戻し（Apps Script連携） ================= */
+async function writeBack(r,c){
+  if(!SETTINGS.gasUrl||!r) return;
+  $("srcNote").textContent="シートへ書き戻し中…";
+  try{
+    const res=await fetch(SETTINGS.gasUrl,{method:"POST",body:JSON.stringify({
+      token:SETTINGS.gasToken||"",
+      row:r.rowNum||0,
+      ts:r.tsRaw||r.dateStr,
+      name:(r.name||"").split(" / ")[0],
+      status:c.stOverride||"",
+      items:(c.items||[]).map(i=>(i.name||"")+(i.part?`(${i.part})`:"")+((+i.qty||1)>1?`×${i.qty}`:"")).join("、")
+    })});
+    const d=await res.json();
+    if(d.ok){ $("srcNote").textContent=`シート書き戻し完了（行${d.row}・${new Date().toLocaleTimeString("ja-JP")}）`; }
+    else throw new Error(d.error||"不明なエラー");
+  }catch(e){
+    $("srcNote").textContent="シート書き戻し失敗（ローカルには保存済み）";
+    alert("スプレッドシートへの書き戻しに失敗しました:\n"+e.message+"\n\n入力はこのブラウザに保存されています。設定タブのウェブアプリURL・共有キーを確認してください。");
   }
 }
 
@@ -877,6 +907,8 @@ function invoiceXlsx(maker){
 
 /* ================= 設定 ================= */
 function renderSettings(){
+  $("setGasUrl").value=SETTINGS.gasUrl||"";
+  $("setGasToken").value=SETTINGS.gasToken||"";
   const rt=$("rateTable").querySelector("tbody");
   rt.innerHTML=Object.entries(SETTINGS.rates).map(([k,v],i)=>`<tr>
     <td><input data-rk="${i}" value="${esc(k)}"></td>
@@ -991,7 +1023,7 @@ $("mIntBody").addEventListener("input",e=>{
 $("mIntBody").addEventListener("click",e=>{const d=e.target.dataset.del;if(d!==undefined){curInternal.splice(+d,1);renderIntRows();updateTotals();}});
 ["mProduct","mShipOut","mShipBack","mLaborExch","mLaborInst","mLaborCust","mOther"].forEach(id=>$(id).addEventListener("input",updateTotals));
 $("mPrefill").addEventListener("click",()=>{const r=DATA.find(x=>x.cid===curCid);if(!r)return;if(r.sheetProduct)$("mProduct").value=r.sheetProduct;if(r.sheetShip)$("mShipOut").value=r.sheetShip;updateTotals();});
-$("mSave").addEventListener("click",()=>{COSTS[curCid]=collectModal();saveCosts();closeModal();renderAll();});
+$("mSave").addEventListener("click",()=>{const r=DATA.find(x=>x.cid===curCid);const c=collectModal();COSTS[curCid]=c;saveCosts();closeModal();renderAll();if(c.stOverride||(c.items||[]).length)writeBack(r,c);});
 $("mCancel").addEventListener("click",closeModal);
 $("mDelete").addEventListener("click",()=>{if(confirm("この案件の入力（費用・代品・ステータス上書き）を削除しますか？")){delete COSTS[curCid];saveCosts();closeModal();renderAll();}});
 $("modalBg").addEventListener("click",e=>{if(e.target===$("modalBg"))closeModal();});
@@ -1005,6 +1037,7 @@ $("modalBg").addEventListener("click",e=>{if(e.target===$("modalBg"))closeModal(
     if(d.pdel!==undefined){SETTINGS.prodMap.splice(+d.pdel,1);saveSettings();renderSettings();}
   });
 });
+["setGasUrl","setGasToken"].forEach(id=>$(id).addEventListener("change",()=>{SETTINGS.gasUrl=$("setGasUrl").value.trim();SETTINGS.gasToken=$("setGasToken").value.trim();saveSettings();}));
 $("addRate").addEventListener("click",()=>{SETTINGS.rates["新しい役割"+(Object.keys(SETTINGS.rates).length+1)]=0;saveSettings();renderSettings();});
 $("addMaker").addEventListener("click",()=>{SETTINGS.makers.push("");renderSettings();});
 $("addMap").addEventListener("click",()=>{SETTINGS.prodMap.push({kw:"",maker:""});renderSettings();});
