@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>不具合報告 KPI ダッシュボード</title>
+<title>不具合対応 費用管理・請求システム</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -13,14 +13,21 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
-.topbar{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;flex-wrap:wrap;}
+.topbar{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#fff;border-bottom:1px solid var(--border);flex-wrap:wrap;}
 .topbar h1{font-size:17px;font-weight:700;}
 .badge{background:#e0e7ff;color:#3730a3;font-size:11px;padding:3px 10px;border-radius:12px;font-weight:600;}
 .topbar .spacer{flex:1;}
 .src-note{font-size:11px;color:var(--muted);}
 button.btn{background:var(--navy);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;}
 button.btn.light{background:#fff;color:var(--text);border:1px solid var(--border);}
+button.btn.danger{background:#fff;color:var(--red);border:1px solid #fecaca;}
 button.btn:hover{opacity:.85;}
+button.btn.sm{padding:4px 10px;font-size:11px;}
+.tabs{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--border);padding:0 20px;position:sticky;top:0;z-index:10;}
+.tab{padding:11px 18px;font-size:13px;font-weight:600;color:#64748b;cursor:pointer;border-bottom:3px solid transparent;user-select:none;}
+.tab.active{color:var(--navy);border-bottom-color:var(--navy);background:#f8fafc;}
+.view{display:none;}
+.view.active{display:block;}
 .wrap{padding:16px 20px;max-width:1600px;margin:0 auto;}
 .banner{display:none;background:#fef3c7;border:1px solid #fcd34d;color:#92400e;padding:8px 14px;border-radius:8px;font-size:12px;margin-bottom:12px;}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px;}
@@ -33,17 +40,16 @@ button.btn:hover{opacity:.85;}
 .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:16px;}
 .filters .f{display:flex;flex-direction:column;gap:4px;}
 .filters label{font-size:11px;color:#64748b;font-weight:600;}
-.filters select,.filters input{border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:13px;background:#fff;min-width:140px;}
+.filters select,.filters input{border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:13px;background:#fff;min-width:130px;}
 .grid{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px;}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
-.panel{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;}
 .panel h3{font-size:13px;font-weight:700;margin-bottom:10px;}
 .chartbox{position:relative;height:280px;}
-.panel.table-panel{overflow:auto;}
-table{width:100%;border-collapse:collapse;font-size:12px;}
-th{position:sticky;top:0;background:#f8fafc;text-align:left;padding:8px;color:#64748b;font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap;}
-td{padding:8px;border-bottom:1px solid #f1f5f9;vertical-align:top;}
-tr:hover td{background:#f8fafc;}
+table.data{width:100%;border-collapse:collapse;font-size:12px;}
+table.data th{position:sticky;top:0;background:#f8fafc;text-align:left;padding:8px;color:#64748b;font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap;}
+table.data td{padding:8px;border-bottom:1px solid #f1f5f9;vertical-align:top;}
+table.data tr:hover td{background:#f8fafc;}
 td a{color:var(--blue);text-decoration:none;font-weight:600;}
 td a:hover{text-decoration:underline;}
 .st{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;}
@@ -52,35 +58,65 @@ td a:hover{text-decoration:underline;}
 .st.hold{background:#e0e7ff;color:#3730a3;}
 .st.open{background:#fee2e2;color:#991b1b;}
 .st.na{background:#f1f5f9;color:#64748b;}
+.st.billed{background:#dbeafe;color:#1e40af;}
+.st.excl{background:#f1f5f9;color:#94a3b8;}
 .note-cell{max-width:340px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;color:#475569;}
 .num{text-align:right;white-space:nowrap;}
 .count-note{font-size:11px;color:var(--muted);margin-left:8px;font-weight:400;}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:50;overflow:auto;padding:30px 16px;}
+.modal{background:#fff;max-width:880px;margin:0 auto;border-radius:12px;padding:20px 24px;}
+.modal h2{font-size:16px;margin-bottom:4px;}
+.case-meta{font-size:12px;color:#64748b;margin-bottom:12px;line-height:1.6;}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:6px;}
+.fgrid label{display:block;font-size:11px;color:#64748b;font-weight:600;margin-bottom:3px;}
+.fgrid input,.fgrid select,.fgrid textarea{width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:13px;}
+.sec-h{font-size:12px;font-weight:700;color:var(--navy);margin:16px 0 8px;border-left:3px solid var(--navy);padding-left:8px;}
+.int-table{width:100%;border-collapse:collapse;font-size:12px;}
+.int-table th{background:#f8fafc;padding:6px;font-size:11px;color:#64748b;text-align:left;}
+.int-table td{padding:3px;}
+.int-table input,.int-table select{width:100%;border:1px solid var(--border);border-radius:5px;padding:5px 6px;font-size:12px;}
+.total-bar{background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:700;color:#075985;margin-top:16px;display:flex;gap:16px;flex-wrap:wrap;}
+.btnrow{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;}
+.set-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px;}
+.set-table td,.set-table th{padding:4px 6px;text-align:left;}
+.set-table input,.set-table select{width:100%;border:1px solid var(--border);border-radius:5px;padding:5px 6px;font-size:12px;}
+.del-x{color:#ef4444;cursor:pointer;font-weight:700;padding:0 6px;}
+.muted{color:#94a3b8;font-size:11px;line-height:1.6;}
 @media(max-width:1000px){.grid,.grid2{grid-template-columns:1fr;}}
+@media print{.topbar,.tabs,.filters,.btnrow{display:none!important;}}
 </style>
 </head>
 <body>
 <div class="topbar">
-  <h1>🔧 不具合報告 KPI ダッシュボード</h1>
+  <h1>🔧 不具合対応 費用管理・請求システム</h1>
   <span class="badge">DAMD 品質管理</span>
   <div class="spacer"></div>
   <span class="src-note" id="srcNote">データ未読込</span>
   <button class="btn light" id="btnCsv">CSV出力</button>
-  <button class="btn light" id="btnClear">データ消去</button>
-  <button class="btn" id="btnLoad">📂 データ読込（xlsx/CSV）</button>
+  <button class="btn light" id="btnClear">案件データ消去</button>
+  <button class="btn" id="btnLoad">📂 案件データ読込（xlsx/CSV）</button>
   <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.tsv" style="display:none">
+  <input type="file" id="jsonInput" accept=".json" style="display:none">
 </div>
+<div class="tabs">
+  <div class="tab active" data-v="dash">📊 ダッシュボード</div>
+  <div class="tab" data-v="cost">💴 費用管理</div>
+  <div class="tab" data-v="bill">🧾 請求集計</div>
+  <div class="tab" data-v="set">⚙ 設定</div>
+</div>
+
+<!-- ============ ダッシュボード ============ -->
+<div class="view active" id="view-dash">
 <div class="wrap">
   <div class="banner" id="banner"></div>
-
   <div class="kpis">
     <div class="kpi"><div class="label">総報告件数</div><div class="value" id="kTotal">–</div><div class="sub" id="kTotalSub"></div></div>
     <div class="kpi"><div class="label">要対応（未対応＋対応中＋保留）</div><div class="value red" id="kOpen">–</div><div class="sub" id="kOpenSub"></div></div>
     <div class="kpi"><div class="label">完了率</div><div class="value green" id="kRate">–</div><div class="sub" id="kRateSub"></div></div>
-    <div class="kpi"><div class="label">実工数 合計</div><div class="value blue" id="kHours">–</div><div class="sub">シート「累計実工数」列の合計 ※4月分は連番入力の疑いあり</div></div>
-    <div class="kpi"><div class="label">代品費用合計（費用＋送料）</div><div class="value amber" id="kCost">–</div><div class="sub" id="kCostSub"></div></div>
+    <div class="kpi"><div class="label">実工数 合計</div><div class="value blue" id="kHours">–</div><div class="sub">シート「累計実工数」列の合計</div></div>
+    <div class="kpi"><div class="label">入力済み費用合計（費用管理より）</div><div class="value amber" id="kCost">–</div><div class="sub" id="kCostSub"></div></div>
     <div class="kpi"><div class="label">平均完了リードタイム</div><div class="value" id="kLead">–</div><div class="sub" id="kLeadSub"></div></div>
   </div>
-
   <div class="filters">
     <div class="f"><label>期間（月）自</label><select id="fFrom"></select></div>
     <div class="f"><label>期間（月）至</label><select id="fTo"></select></div>
@@ -91,7 +127,6 @@ td a:hover{text-decoration:underline;}
     <div class="f"><label>キーワード検索</label><input id="fText" type="text" placeholder="氏名・会社・内容など"></div>
     <button class="btn light" id="btnReset">リセット</button>
   </div>
-
   <div class="grid">
     <div class="panel"><h3>月別 報告件数の推移（ステータス内訳）</h3><div class="chartbox"><canvas id="cMonth"></canvas></div></div>
     <div class="panel"><h3>ステータス構成</h3><div class="chartbox"><canvas id="cStatus"></canvas></div></div>
@@ -102,16 +137,147 @@ td a:hover{text-decoration:underline;}
   </div>
   <div class="grid2">
     <div class="panel"><h3>車種別 件数（Top 10）</h3><div class="chartbox"><canvas id="cCar"></canvas></div></div>
-    <div class="panel"><h3>月別 代品費用（費用＋送料）</h3><div class="chartbox"><canvas id="cCost"></canvas></div></div>
+    <div class="panel"><h3>月別 入力済み費用（費用管理より）</h3><div class="chartbox"><canvas id="cCost2"></canvas></div></div>
   </div>
-
-  <div class="panel table-panel">
+  <div class="panel">
     <h3>報告明細 <span class="count-note" id="tblCount"></span></h3>
     <div style="max-height:480px;overflow:auto;">
-      <table>
-        <thead><tr><th>受付日</th><th>ステータス</th><th>車種</th><th>製品</th><th>症状</th><th>発生時期</th><th class="num">工数h</th><th class="num">代品費用</th><th>報告者</th><th>内容</th><th>写真</th></tr></thead>
+      <table class="data">
+        <thead><tr><th>受付日</th><th>ステータス</th><th>車種</th><th>製品</th><th>症状</th><th>発生時期</th><th class="num">工数h</th><th class="num">費用計</th><th>報告者</th><th>内容</th><th>写真</th></tr></thead>
         <tbody id="tblBody"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============ 費用管理 ============ -->
+<div class="view" id="view-cost">
+<div class="wrap">
+  <div class="kpis">
+    <div class="kpi"><div class="label">費用入力済み案件</div><div class="value blue" id="cN">–</div><div class="sub" id="cNSub"></div></div>
+    <div class="kpi"><div class="label">入力済み費用合計</div><div class="value amber" id="cSum">–</div><div class="sub">代品＋送料＋工賃＋社内工数＋交通費＋実費</div></div>
+    <div class="kpi"><div class="label">製造業者 未割当</div><div class="value red" id="cNoMaker">–</div><div class="sub">設定の対応表または案件ごとに指定してください</div></div>
+    <div class="kpi"><div class="label">未請求金額</div><div class="value" id="cUnbilled">–</div><div class="sub">状態が「未請求」の合計</div></div>
+  </div>
+  <div class="filters">
+    <div class="f"><label>製造業者</label><select id="cfMaker"><option value="">すべて</option></select></div>
+    <div class="f"><label>入力状況</label><select id="cfState"><option value="">すべて</option><option>未入力</option><option>未請求</option><option>請求済</option><option>対象外</option></select></div>
+    <div class="f"><label>キーワード検索</label><input id="cfText" type="text" placeholder="報告者・製品・車種など"></div>
+    <span class="muted">行の「費用入力」から案件ごとの費用を登録します。</span>
+  </div>
+  <div class="panel">
+    <h3>案件一覧 <span class="count-note" id="cCount"></span></h3>
+    <div style="max-height:560px;overflow:auto;">
+      <table class="data">
+        <thead><tr><th></th><th>受付日</th><th>製造業者</th><th>車種</th><th>製品</th><th>報告者</th><th>症状</th><th class="num">製品代</th><th class="num">送料</th><th class="num">工賃</th><th class="num">社内工数</th><th class="num">交通費</th><th class="num">合計</th><th>状態</th></tr></thead>
+        <tbody id="costBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============ 請求集計 ============ -->
+<div class="view" id="view-bill">
+<div class="wrap">
+  <div class="filters">
+    <div class="f"><label>期間（月）自</label><select id="bFrom"></select></div>
+    <div class="f"><label>期間（月）至</label><select id="bTo"></select></div>
+    <div class="f"><label>対象状態</label><select id="bState"><option value="未請求">未請求のみ</option><option value="請求済">請求済のみ</option><option value="">未請求＋請求済</option></select></div>
+    <span class="muted">「対象外」の案件は常に集計から除外されます。</span>
+  </div>
+  <div class="panel">
+    <h3>製造業者別 請求集計 <span class="count-note" id="bCount"></span></h3>
+    <div style="overflow:auto;">
+      <table class="data">
+        <thead><tr><th>製造業者</th><th class="num">件数</th><th class="num">製品代</th><th class="num">送料</th><th class="num">工賃</th><th class="num">社内工数</th><th class="num">交通費</th><th class="num">その他実費</th><th class="num">請求合計</th><th></th><th></th></tr></thead>
+        <tbody id="billBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>請求ルール（メモ）</h3>
+    <div class="muted">請求対象費目: ①製品代（代品） ②往復送料（発送・返送） ③工賃（交換・取付・客先請求分） ④社内対応工数（時間×役割別単価） ⑤交通費（ガソリン・高速・電車） ⑥その他実費。<br>
+    製造業者へは上記費目を請求対象とすることを事前に通知・合意のうえ運用してください。単価は「設定」タブで管理します。</div>
+  </div>
+</div>
+</div>
+
+<!-- ============ 設定 ============ -->
+<div class="view" id="view-set">
+<div class="wrap">
+  <div class="grid2">
+    <div class="panel">
+      <h3>社内工数の時間単価（円/時間）</h3>
+      <table class="set-table" id="rateTable"><thead><tr><th>役割</th><th style="width:130px">単価</th><th style="width:30px"></th></tr></thead><tbody></tbody></table>
+      <button class="btn light sm" id="addRate">＋ 役割を追加</button>
+      <div class="muted" style="margin-top:6px">費用入力の「社内対応」で役割を選ぶと、この単価が自動で入ります（案件ごとに上書き可）。</div>
+    </div>
+    <div class="panel">
+      <h3>製造業者マスタ</h3>
+      <table class="set-table" id="makerTable"><thead><tr><th>製造業者名</th><th style="width:30px"></th></tr></thead><tbody></tbody></table>
+      <button class="btn light sm" id="addMaker">＋ 製造業者を追加</button>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>製品 → 製造業者 自動判定表</h3>
+    <div class="muted" style="margin-bottom:8px">製品名にキーワードが含まれる案件を、指定の製造業者に自動で割り当てます（上の行が優先）。案件ごとの手動指定が最優先です。</div>
+    <table class="set-table" id="mapTable"><thead><tr><th>製品名キーワード</th><th style="width:220px">製造業者</th><th style="width:30px"></th></tr></thead><tbody></tbody></table>
+    <button class="btn light sm" id="addMap">＋ 行を追加</button>
+  </div>
+  <div class="panel">
+    <h3>費用データの保存・共有</h3>
+    <div class="muted" style="margin-bottom:8px">費用データ・設定はこのブラウザ内に自動保存されます。他のPCと共有する場合やバックアップにはJSONファイルを使ってください（案件データのxlsxとは別ファイルです）。</div>
+    <button class="btn" id="btnExportJson">💾 費用データを書き出し（JSON）</button>
+    <button class="btn light" id="btnImportJson">📥 費用データを読み込み（JSON）</button>
+    <button class="btn danger" id="btnWipeCosts">費用データを全消去</button>
+  </div>
+</div>
+</div>
+
+<!-- ============ 費用入力モーダル ============ -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2>費用入力</h2>
+    <div class="case-meta" id="mMeta"></div>
+    <div class="fgrid">
+      <div><label>製造業者（請求先）</label><select id="mMaker"></select></div>
+      <div><label>請求状態</label><select id="mState"><option>未請求</option><option>請求済</option><option>対象外</option></select></div>
+    </div>
+    <div class="sec-h">① 代品費用</div>
+    <div class="fgrid">
+      <div><label>製品代（円）</label><input type="number" id="mProduct" min="0"></div>
+      <div><label>&nbsp;</label><button class="btn light sm" id="mPrefill">シートの代品費用・送料を取込</button></div>
+    </div>
+    <div class="sec-h">② 送料</div>
+    <div class="fgrid">
+      <div><label>発送送料（円）</label><input type="number" id="mShipOut" min="0"></div>
+      <div><label>返送送料（円）</label><input type="number" id="mShipBack" min="0"></div>
+    </div>
+    <div class="sec-h">③ 工賃</div>
+    <div class="fgrid">
+      <div><label>交換工賃（円）</label><input type="number" id="mLaborExch" min="0"></div>
+      <div><label>取付工賃（円）</label><input type="number" id="mLaborInst" min="0"></div>
+      <div><label>客先から請求された工賃（円）</label><input type="number" id="mLaborCust" min="0"></div>
+    </div>
+    <div class="sec-h">④ 社内対応工数・交通費</div>
+    <table class="int-table">
+      <thead><tr><th style="width:110px">対応種別</th><th style="width:110px">役割</th><th style="width:70px">時間h</th><th style="width:90px">単価円/h</th><th style="width:90px">ガソリン代</th><th style="width:90px">高速代</th><th style="width:90px">電車代</th><th class="num" style="width:90px">小計</th><th style="width:30px"></th></tr></thead>
+      <tbody id="mIntBody"></tbody>
+    </table>
+    <button class="btn light sm" id="mAddInt" style="margin-top:6px">＋ 対応を追加</button>
+    <div class="sec-h">⑤ その他</div>
+    <div class="fgrid">
+      <div><label>その他実費（円）</label><input type="number" id="mOther" min="0"></div>
+      <div style="grid-column:span 2"><label>備考</label><input type="text" id="mMemo" placeholder="請求時の注記など"></div>
+    </div>
+    <div class="total-bar" id="mTotals"></div>
+    <div class="btnrow">
+      <button class="btn danger" id="mDelete">この案件の費用を削除</button>
+      <span style="flex:1"></span>
+      <button class="btn light" id="mCancel">キャンセル</button>
+      <button class="btn" id="mSave">保存</button>
     </div>
   </div>
 </div>
@@ -119,6 +285,8 @@ td a:hover{text-decoration:underline;}
 <script>
 /* データはローカルで読み込んだファイルのみ使用。外部への通信は一切行いません。 */
 const STORE_KEY="kpi-dashboard-data";
+const COST_KEY="kpi-dashboard-costs";
+const SET_KEY="kpi-dashboard-settings";
 
 /* ================= CSVパース ================= */
 function parseCSV(text){
@@ -198,7 +366,7 @@ function normProd(s){
   if(u.includes("フェイスチェンジ")||u.includes("フェイスキット")) return "フェイスチェンジキット";
   if(u.includes("advance")||u.includes("アドバンス")) return "little G. ADVANCE";
   if(u.includes("littleg")||u.includes("リトルg")) return "little G. シリーズ";
-  if(u.includes("littled")||u.includes("リトルd")||u.includes("リトルディー")||u==="littled") return "little D. シリーズ";
+  if(u.includes("littled")||u.includes("リトルd")||u.includes("リトルディー")) return "little D. シリーズ";
   if(u.includes("littleb")) return "little B.";
   if(u.includes("ルーフラック")||u.includes("tripbasket")) return "ルーフラック";
   if(u.includes("reso")||u.includes("レゾネーター")) return "RESONATOR";
@@ -220,7 +388,7 @@ function splitSyms(s){
   return arr.length?arr:["未分類"];
 }
 
-/* CSV/xlsx行 → タプル（保存・復元用の中間形式） */
+/* CSV/xlsx行 → タプル */
 function rowToTuple(r, link, extraPhotos){
   const get=i=>(r[i]||"").trim();
   const photos=[...new Set(((r[21]||"").match(/https?:\/\/[^\s"']+/g)||[]).concat(extraPhotos||[]))];
@@ -238,135 +406,27 @@ function makeRec(d,f,c,h,st,nm,car,prod,sym,when,note,cost,ship,link,photos){
     prod: normProd(prod), prodRaw:(prod||"").trim(),
     syms: splitSyms(sym), when:(when||"").replace(/\s+/g," ").trim(),
     note:(note||"").replace(/\s+/g," ").trim(),
-    cost: money(cost)+money(ship),
-    link: link||"", photos: photos||[]
+    sheetProduct: money(cost), sheetShip: money(ship),
+    photos: photos||[]
   };
 }
 
 let DATA = [];
 let charts = {};
-
-/* ================= フィルタ ================= */
 const $=id=>document.getElementById(id);
-function fillFilters(){
-  const months=[...new Set(DATA.map(r=>r.month).filter(Boolean))].sort();
-  const opt=(v,t)=>`<option value="${v}">${t||v}</option>`;
-  $("fFrom").innerHTML=opt("","最初から")+months.map(m=>opt(m)).join("");
-  $("fTo").innerHTML=opt("","最新まで")+months.map(m=>opt(m)).join("");
-  const sts=["未対応","対応中","保留","完了","その他","未設定"].filter(s=>DATA.some(r=>r.st===s));
-  $("fStatus").innerHTML=opt("","すべて")+sts.map(s=>opt(s)).join("");
-  const cars=[...new Set(DATA.map(r=>r.car))].sort((a,b)=>a.localeCompare(b,"ja"));
-  $("fCar").innerHTML=opt("","すべて")+cars.map(c=>opt(c)).join("");
-  const prods=[...new Set(DATA.map(r=>r.prod))].sort((a,b)=>a.localeCompare(b,"ja"));
-  $("fProd").innerHTML=opt("","すべて")+prods.map(p=>opt(p)).join("");
-  const syms=[...new Set(DATA.flatMap(r=>r.syms))].sort((a,b)=>a.localeCompare(b,"ja"));
-  $("fSym").innerHTML=opt("","すべて")+syms.map(s=>opt(s)).join("");
-}
-function filtered(){
-  const from=$("fFrom").value, to=$("fTo").value, st=$("fStatus").value,
-        car=$("fCar").value, prod=$("fProd").value, sym=$("fSym").value,
-        q=$("fText").value.trim().toLowerCase();
-  return DATA.filter(r=>{
-    if(from && r.month && r.month<from) return false;
-    if(to && r.month && r.month>to) return false;
-    if((from||to) && !r.month) return false;
-    if(st && r.st!==st) return false;
-    if(car && r.car!==car) return false;
-    if(prod && r.prod!==prod) return false;
-    if(sym && !r.syms.includes(sym)) return false;
-    if(q){
-      const hay=(r.name+" "+r.carRaw+" "+r.prodRaw+" "+r.note+" "+r.stRaw+" "+r.syms.join(" ")).toLowerCase();
-      if(!hay.includes(q)) return false;
-    }
-    return true;
-  });
-}
-
-/* ================= 集計・描画 ================= */
-const COLORS=["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#84cc16","#ec4899","#64748b"];
 const yen=n=>"¥"+Math.round(n).toLocaleString();
-function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function esc(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function count(arr){const m={};arr.forEach(k=>m[k]=(m[k]||0)+1);return m;}
 function mkChart(id,cfg){ if(charts[id])charts[id].destroy(); charts[id]=new Chart($(id),cfg); }
 
-function render(){
-  const R=filtered();
-  /* KPI */
-  const bySt=count(R.map(r=>r.st));
-  const open=(bySt["未対応"]||0)+(bySt["対応中"]||0)+(bySt["保留"]||0);
-  const done=bySt["完了"]||0;
-  const hours=R.reduce((s,r)=>s+r.hours,0);
-  const cost=R.reduce((s,r)=>s+r.cost,0);
-  const leads=R.filter(r=>r.date&&r.done).map(r=>(r.done-r.date)/86400000).filter(v=>v>=0);
-  const avgLead=leads.length? leads.reduce((a,b)=>a+b,0)/leads.length : null;
-
-  $("kTotal").textContent=R.length;
-  $("kTotalSub").textContent=`全${DATA.length}件中（フィルタ適用後）`;
-  $("kOpen").textContent=open;
-  $("kOpen").className="value "+(open>0?"red":"green");
-  $("kOpenSub").textContent=`未対応 ${bySt["未対応"]||0} ／ 対応中 ${bySt["対応中"]||0} ／ 保留 ${bySt["保留"]||0}`;
-  $("kRate").textContent=R.length?Math.round(done/R.length*100)+"%":"–";
-  $("kRateSub").textContent=`完了 ${done} 件`;
-  $("kHours").textContent=hours%1?hours.toFixed(1)+"h":hours+"h";
-  $("kCost").textContent=yen(cost);
-  $("kCostSub").textContent=`費用入力 ${R.filter(r=>r.cost>0).length} 件`;
-  $("kLead").textContent=avgLead==null?"–":(avgLead<1? (avgLead*24).toFixed(1)+"時間" : avgLead.toFixed(1)+"日");
-  $("kLeadSub").textContent=leads.length?`完了日時入力 ${leads.length} 件から算出`:"完了日時の入力データなし";
-
-  /* 月別 */
-  const months=[...new Set(R.map(r=>r.month).filter(Boolean))].sort();
-  const stGroups=[["完了","#10b981"],["対応中","#f59e0b"],["保留","#8b5cf6"],["未対応","#ef4444"],["その他","#94a3b8"],["未設定","#cbd5e1"]];
-  mkChart("cMonth",{type:"bar",
-    data:{labels:months,datasets:stGroups.filter(([g])=>R.some(r=>r.st===g)).map(([g,c])=>({label:g,backgroundColor:c,data:months.map(m=>R.filter(r=>r.month===m&&r.st===g).length),stack:"s"}))},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom",labels:{boxWidth:12,font:{size:11}}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});
-
-  /* ステータス */
-  const stKeys=stGroups.map(g=>g[0]).filter(g=>bySt[g]);
-  mkChart("cStatus",{type:"doughnut",
-    data:{labels:stKeys,datasets:[{data:stKeys.map(k=>bySt[k]),backgroundColor:stKeys.map(k=>stGroups.find(g=>g[0]===k)[1])}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:"60%",plugins:{legend:{position:"bottom",labels:{boxWidth:12,font:{size:11}}}}}});
-
-  /* 症状別 */
-  const symC=count(R.flatMap(r=>r.syms));
-  const symE=Object.entries(symC).sort((a,b)=>b[1]-a[1]);
-  mkChart("cSym",{type:"bar",
-    data:{labels:symE.map(e=>e[0]),datasets:[{data:symE.map(e=>e[1]),backgroundColor:"#3b82f6",borderRadius:4}]},
-    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
-
-  /* 製品別 */
-  const prodE=Object.entries(count(R.map(r=>r.prod))).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  mkChart("cProd",{type:"bar",
-    data:{labels:prodE.map(e=>e[0]),datasets:[{data:prodE.map(e=>e[1]),backgroundColor:"#10b981",borderRadius:4}]},
-    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
-
-  /* 車種別 */
-  const carE=Object.entries(count(R.map(r=>r.car))).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  mkChart("cCar",{type:"bar",
-    data:{labels:carE.map(e=>e[0]),datasets:[{data:carE.map(e=>e[1]),backgroundColor:"#8b5cf6",borderRadius:4}]},
-    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
-
-  /* 月別費用 */
-  mkChart("cCost",{type:"bar",
-    data:{labels:months,datasets:[{data:months.map(m=>R.filter(r=>r.month===m).reduce((s,r)=>s+r.cost,0)),backgroundColor:"#f59e0b",borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>yen(c.parsed.y)}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"¥"+v.toLocaleString()}}}}});
-
-  /* 明細 */
-  const stCls={"完了":"done","対応中":"wip","保留":"hold","未対応":"open","その他":"na","未設定":"na"};
-  const rows=[...R].sort((a,b)=>(b.date||0)-(a.date||0));
-  $("tblBody").innerHTML=rows.map(r=>`<tr>
-    <td style="white-space:nowrap">${r.link?`<a href="${esc(r.link)}" target="_blank" rel="noopener" title="タイムスタンプのリンクを開く">${esc(r.dateStr)||"リンク"} 🔗</a>`:(esc(r.dateStr)||"–")}</td>
-    <td><span class="st ${stCls[r.st]}" title="${esc(r.stRaw)}">${r.st}</span></td>
-    <td>${esc(r.car)}</td>
-    <td title="${esc(r.prodRaw)}">${esc(r.prod)}</td>
-    <td>${esc(r.syms.join("、"))}</td>
-    <td>${esc(r.when)||"–"}</td>
-    <td class="num">${r.hours||"–"}</td>
-    <td class="num">${r.cost?yen(r.cost):"–"}</td>
-    <td>${esc(r.name)}</td>
-    <td class="note-cell" title="${esc(r.note)}">${esc(r.note)}</td>
-    <td style="white-space:nowrap">${r.photos.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener">📷${i+1}</a>`).join(" ")}</td>
-  </tr>`).join("");
-  $("tblCount").textContent=`${rows.length} 件`;
+/* 案件ID（受付日＋報告者＋製品から生成。同一内容の重複行は連番付与） */
+function assignIds(){
+  const seen={};
+  DATA.forEach(r=>{
+    const base=(r.dateStr||"nodate")+"|"+r.name.slice(0,20)+"|"+(r.prodRaw||r.prod).slice(0,20);
+    const n=seen[base]=(seen[base]||0)+1;
+    r.cid=n>1? base+"#"+n : base;
+  });
 }
 
 /* ================= ファイル読込（ローカルのみ） ================= */
@@ -398,15 +458,17 @@ function tuplesFromCsv(text){
 function applyTuples(tuples, srcName){
   if(!tuples.length){ alert("データを読み取れませんでした。ファイル形式をご確認ください。"); return; }
   DATA=tuples.map(t=>makeRec(...t));
+  assignIds();
   try{ localStorage.setItem(STORE_KEY, JSON.stringify({t:Date.now(), name:srcName, tuples})); }catch(e){}
   $("banner").style.display="none";
   $("srcNote").textContent=`読込ファイル: ${srcName}（${new Date().toLocaleString("ja-JP")}・${DATA.length}件）`;
-  fillFilters(); render();
+  renderAll();
 }
 async function handleFile(file){
   if(!file) return;
   const name=file.name.toLowerCase();
   try{
+    if(name.endsWith(".json")){ importJson(await file.text()); return; }
     if(name.endsWith(".csv")||name.endsWith(".tsv")) applyTuples(tuplesFromCsv(await file.text()), file.name);
     else applyTuples(tuplesFromXlsx(await file.arrayBuffer()), file.name);
   }catch(e){ alert("読込エラー: "+e.message); }
@@ -416,6 +478,7 @@ function restore(){
     const s=JSON.parse(localStorage.getItem(STORE_KEY)||"null");
     if(s&&s.tuples&&s.tuples.length){
       DATA=s.tuples.map(t=>makeRec(...t));
+      assignIds();
       $("srcNote").textContent=`読込ファイル: ${s.name}（${new Date(s.t).toLocaleString("ja-JP")} 保存・${DATA.length}件）`;
       return true;
     }
@@ -423,34 +486,465 @@ function restore(){
   return false;
 }
 
-/* ================= CSV出力 ================= */
+/* ================= 費用・設定データ ================= */
+let COSTS={};
+let SETTINGS={rates:{"技術者":5000,"品質担当":4000,"営業":3000}, makers:[], prodMap:[]};
+function loadCostData(){
+  try{ const c=JSON.parse(localStorage.getItem(COST_KEY)||"null"); if(c) COSTS=c; }catch(e){}
+  try{ const s=JSON.parse(localStorage.getItem(SET_KEY)||"null"); if(s) SETTINGS=Object.assign(SETTINGS,s); }catch(e){}
+}
+function saveCosts(){ try{ localStorage.setItem(COST_KEY, JSON.stringify(COSTS)); }catch(e){alert("保存に失敗: "+e.message);} }
+function saveSettings(){ try{ localStorage.setItem(SET_KEY, JSON.stringify(SETTINGS)); }catch(e){} }
+function emptyCost(){ return {maker:"", status:"未請求", product:0, shipOut:0, shipBack:0, laborExch:0, laborInst:0, laborCust:0, other:0, memo:"", internal:[]}; }
+function costTotal(c){
+  if(!c) return null;
+  const internal=(c.internal||[]).reduce((s,r)=>s+(+r.hours||0)*(+r.rate||0),0);
+  const trans=(c.internal||[]).reduce((s,r)=>s+(+r.gas||0)+(+r.toll||0)+(+r.train||0),0);
+  const t={product:+c.product||0, ship:(+c.shipOut||0)+(+c.shipBack||0),
+    labor:(+c.laborExch||0)+(+c.laborInst||0)+(+c.laborCust||0), internal, trans, other:+c.other||0};
+  t.sum=t.product+t.ship+t.labor+t.internal+t.trans+t.other;
+  return t;
+}
+function hasCost(c){ const t=costTotal(c); return t&&t.sum>0; }
+function resolveMaker(r){
+  const c=COSTS[r.cid];
+  if(c&&c.maker) return c.maker;
+  const hay=((r.prodRaw||"")+" "+(r.prod||"")).normalize("NFKC").toLowerCase();
+  for(const m of (SETTINGS.prodMap||[])){
+    if(m.kw && m.maker && hay.includes(String(m.kw).normalize("NFKC").toLowerCase())) return m.maker;
+  }
+  return "";
+}
+function caseState(r){
+  const c=COSTS[r.cid];
+  if(!c||!hasCost(c)) return "未入力";
+  return c.status||"未請求";
+}
+
+/* ================= ダッシュボード ================= */
+function fillFilters(){
+  const months=[...new Set(DATA.map(r=>r.month).filter(Boolean))].sort();
+  const opt=(v,t)=>`<option value="${esc(v)}">${esc(t||v)}</option>`;
+  $("fFrom").innerHTML=opt("","最初から")+months.map(m=>opt(m)).join("");
+  $("fTo").innerHTML=opt("","最新まで")+months.map(m=>opt(m)).join("");
+  $("bFrom").innerHTML=opt("","最初から")+months.map(m=>opt(m)).join("");
+  $("bTo").innerHTML=opt("","最新まで")+months.map(m=>opt(m)).join("");
+  const sts=["未対応","対応中","保留","完了","その他","未設定"].filter(s=>DATA.some(r=>r.st===s));
+  $("fStatus").innerHTML=opt("","すべて")+sts.map(s=>opt(s)).join("");
+  const cars=[...new Set(DATA.map(r=>r.car))].sort((a,b)=>a.localeCompare(b,"ja"));
+  $("fCar").innerHTML=opt("","すべて")+cars.map(c=>opt(c)).join("");
+  const prods=[...new Set(DATA.map(r=>r.prod))].sort((a,b)=>a.localeCompare(b,"ja"));
+  $("fProd").innerHTML=opt("","すべて")+prods.map(p=>opt(p)).join("");
+  const syms=[...new Set(DATA.flatMap(r=>r.syms))].sort((a,b)=>a.localeCompare(b,"ja"));
+  $("fSym").innerHTML=opt("","すべて")+syms.map(s=>opt(s)).join("");
+  const mk=[...new Set([...(SETTINGS.makers||[]), ...DATA.map(r=>resolveMaker(r)).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,"ja"));
+  $("cfMaker").innerHTML=opt("","すべて")+mk.map(m=>opt(m)).join("")+opt("__none__","（未割当）");
+}
+function filtered(){
+  const from=$("fFrom").value, to=$("fTo").value, st=$("fStatus").value,
+        car=$("fCar").value, prod=$("fProd").value, sym=$("fSym").value,
+        q=$("fText").value.trim().toLowerCase();
+  return DATA.filter(r=>{
+    if(from && r.month && r.month<from) return false;
+    if(to && r.month && r.month>to) return false;
+    if((from||to) && !r.month) return false;
+    if(st && r.st!==st) return false;
+    if(car && r.car!==car) return false;
+    if(prod && r.prod!==prod) return false;
+    if(sym && !r.syms.includes(sym)) return false;
+    if(q){
+      const hay=(r.name+" "+r.carRaw+" "+r.prodRaw+" "+r.note+" "+r.stRaw+" "+r.syms.join(" ")).toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function render(){
+  const R=filtered();
+  const bySt=count(R.map(r=>r.st));
+  const open=(bySt["未対応"]||0)+(bySt["対応中"]||0)+(bySt["保留"]||0);
+  const done=bySt["完了"]||0;
+  const hours=R.reduce((s,r)=>s+r.hours,0);
+  const entered=R.map(r=>({r,t:costTotal(COSTS[r.cid])})).filter(x=>x.t&&x.t.sum>0);
+  const cost=entered.reduce((s,x)=>s+x.t.sum,0);
+  const leads=R.filter(r=>r.date&&r.done).map(r=>(r.done-r.date)/86400000).filter(v=>v>=0);
+  const avgLead=leads.length? leads.reduce((a,b)=>a+b,0)/leads.length : null;
+
+  $("kTotal").textContent=R.length;
+  $("kTotalSub").textContent=`全${DATA.length}件中（フィルタ適用後）`;
+  $("kOpen").textContent=open;
+  $("kOpen").className="value "+(open>0?"red":"green");
+  $("kOpenSub").textContent=`未対応 ${bySt["未対応"]||0} ／ 対応中 ${bySt["対応中"]||0} ／ 保留 ${bySt["保留"]||0}`;
+  $("kRate").textContent=R.length?Math.round(done/R.length*100)+"%":"–";
+  $("kRateSub").textContent=`完了 ${done} 件`;
+  $("kHours").textContent=hours%1?hours.toFixed(1)+"h":hours+"h";
+  $("kCost").textContent=yen(cost);
+  $("kCostSub").textContent=`費用入力 ${entered.length} 件（費用管理タブで入力）`;
+  $("kLead").textContent=avgLead==null?"–":(avgLead<1? (avgLead*24).toFixed(1)+"時間" : avgLead.toFixed(1)+"日");
+  $("kLeadSub").textContent=leads.length?`完了日時入力 ${leads.length} 件から算出`:"完了日時の入力データなし";
+
+  const months=[...new Set(R.map(r=>r.month).filter(Boolean))].sort();
+  const stGroups=[["完了","#10b981"],["対応中","#f59e0b"],["保留","#8b5cf6"],["未対応","#ef4444"],["その他","#94a3b8"],["未設定","#cbd5e1"]];
+  mkChart("cMonth",{type:"bar",
+    data:{labels:months,datasets:stGroups.filter(([g])=>R.some(r=>r.st===g)).map(([g,c])=>({label:g,backgroundColor:c,data:months.map(m=>R.filter(r=>r.month===m&&r.st===g).length),stack:"s"}))},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom",labels:{boxWidth:12,font:{size:11}}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});
+  const stKeys=stGroups.map(g=>g[0]).filter(g=>bySt[g]);
+  mkChart("cStatus",{type:"doughnut",
+    data:{labels:stKeys,datasets:[{data:stKeys.map(k=>bySt[k]),backgroundColor:stKeys.map(k=>stGroups.find(g=>g[0]===k)[1])}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:"60%",plugins:{legend:{position:"bottom",labels:{boxWidth:12,font:{size:11}}}}}});
+  const symE=Object.entries(count(R.flatMap(r=>r.syms))).sort((a,b)=>b[1]-a[1]);
+  mkChart("cSym",{type:"bar",
+    data:{labels:symE.map(e=>e[0]),datasets:[{data:symE.map(e=>e[1]),backgroundColor:"#3b82f6",borderRadius:4}]},
+    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
+  const prodE=Object.entries(count(R.map(r=>r.prod))).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  mkChart("cProd",{type:"bar",
+    data:{labels:prodE.map(e=>e[0]),datasets:[{data:prodE.map(e=>e[1]),backgroundColor:"#10b981",borderRadius:4}]},
+    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
+  const carE=Object.entries(count(R.map(r=>r.car))).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  mkChart("cCar",{type:"bar",
+    data:{labels:carE.map(e=>e[0]),datasets:[{data:carE.map(e=>e[1]),backgroundColor:"#8b5cf6",borderRadius:4}]},
+    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
+  mkChart("cCost2",{type:"bar",
+    data:{labels:months,datasets:[{data:months.map(m=>R.filter(r=>r.month===m).reduce((s,r)=>{const t=costTotal(COSTS[r.cid]);return s+(t?t.sum:0);},0)),backgroundColor:"#f59e0b",borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>yen(c.parsed.y)}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"¥"+v.toLocaleString()}}}}});
+
+  const stCls={"完了":"done","対応中":"wip","保留":"hold","未対応":"open","その他":"na","未設定":"na"};
+  const rows=[...R].sort((a,b)=>(b.date||0)-(a.date||0));
+  $("tblBody").innerHTML=rows.map(r=>{
+    const t=costTotal(COSTS[r.cid]);
+    const disp=t&&t.sum>0? yen(t.sum) : (r.sheetProduct+r.sheetShip>0? yen(r.sheetProduct+r.sheetShip)+"※" : "–");
+    return `<tr>
+    <td style="white-space:nowrap">${esc(r.dateStr)||"–"}</td>
+    <td><span class="st ${stCls[r.st]}" title="${esc(r.stRaw)}">${r.st}</span></td>
+    <td>${esc(r.car)}</td>
+    <td title="${esc(r.prodRaw)}">${esc(r.prod)}</td>
+    <td>${esc(r.syms.join("、"))}</td>
+    <td>${esc(r.when)||"–"}</td>
+    <td class="num">${r.hours||"–"}</td>
+    <td class="num" title="※はシート記載値">${disp}</td>
+    <td>${esc(r.name)}</td>
+    <td class="note-cell" title="${esc(r.note)}">${esc(r.note)}</td>
+    <td style="white-space:nowrap">${r.photos.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener">📷${i+1}</a>`).join(" ")}</td>
+  </tr>`;}).join("");
+  $("tblCount").textContent=`${rows.length} 件`;
+}
+
+/* ================= 費用管理ビュー ================= */
+function renderCost(){
+  const mk=$("cfMaker").value, stf=$("cfState").value, q=$("cfText").value.trim().toLowerCase();
+  const rows=[...DATA].sort((a,b)=>(b.date||0)-(a.date||0)).filter(r=>{
+    const maker=resolveMaker(r);
+    if(mk==="__none__"&&maker) return false;
+    if(mk&&mk!=="__none__"&&maker!==mk) return false;
+    if(stf&&caseState(r)!==stf) return false;
+    if(q){
+      const hay=(r.name+" "+r.carRaw+" "+r.prodRaw+" "+r.prod+" "+maker).toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  const entered=DATA.map(r=>costTotal(COSTS[r.cid])).filter(t=>t&&t.sum>0);
+  $("cN").textContent=entered.length+" / "+DATA.length;
+  $("cNSub").textContent="全案件中の入力済み件数";
+  $("cSum").textContent=yen(entered.reduce((s,t)=>s+t.sum,0));
+  $("cNoMaker").textContent=DATA.filter(r=>!resolveMaker(r)).length;
+  $("cUnbilled").textContent=yen(DATA.filter(r=>caseState(r)==="未請求").reduce((s,r)=>{const t=costTotal(COSTS[r.cid]);return s+(t?t.sum:0);},0));
+  const stCls={"未入力":"na","未請求":"wip","請求済":"billed","対象外":"excl"};
+  $("costBody").innerHTML=rows.map(r=>{
+    const t=costTotal(COSTS[r.cid]);
+    const maker=resolveMaker(r);
+    const state=caseState(r);
+    return `<tr>
+    <td><button class="btn sm" onclick="openCostModal('${esc(r.cid).replace(/'/g,"\\'")}')">費用入力</button></td>
+    <td style="white-space:nowrap">${esc(r.dateStr)||"–"}</td>
+    <td>${maker?esc(maker):'<span class="st na">未割当</span>'}</td>
+    <td>${esc(r.car)}</td>
+    <td title="${esc(r.prodRaw)}">${esc(r.prod)}</td>
+    <td>${esc(r.name)}</td>
+    <td>${esc(r.syms.join("、"))}</td>
+    <td class="num">${t&&t.product?yen(t.product):"–"}</td>
+    <td class="num">${t&&t.ship?yen(t.ship):"–"}</td>
+    <td class="num">${t&&t.labor?yen(t.labor):"–"}</td>
+    <td class="num">${t&&t.internal?yen(t.internal):"–"}</td>
+    <td class="num">${t&&t.trans?yen(t.trans):"–"}</td>
+    <td class="num"><b>${t&&t.sum?yen(t.sum):"–"}</b></td>
+    <td><span class="st ${stCls[state]}">${state}</span></td>
+  </tr>`;}).join("");
+  $("cCount").textContent=`${rows.length} 件`;
+}
+
+/* ================= 費用入力モーダル ================= */
+let curCid=null, curInternal=[];
+function makerOptions(sel){
+  const mk=[...new Set([...(SETTINGS.makers||[]), ...(SETTINGS.prodMap||[]).map(m=>m.maker)])].filter(Boolean).sort((a,b)=>a.localeCompare(b,"ja"));
+  return `<option value="">（未指定＝自動判定）</option>`+mk.map(m=>`<option ${m===sel?"selected":""}>${esc(m)}</option>`).join("");
+}
+function openCostModal(cid){
+  const r=DATA.find(x=>x.cid===cid); if(!r) return;
+  curCid=cid;
+  const c=COSTS[cid]||emptyCost();
+  curInternal=JSON.parse(JSON.stringify(c.internal||[]));
+  $("mMeta").innerHTML=`<b>${esc(r.dateStr)}</b>｜${esc(r.car)}｜${esc(r.prodRaw||r.prod)}｜報告者: ${esc(r.name)}<br>症状: ${esc(r.syms.join("、"))}　${esc(r.note).slice(0,120)}<br>自動判定の製造業者: <b>${esc(resolveMaker(r)||"未割当")}</b>／シート記載: 代品費用 ${yen(r.sheetProduct)}・送料 ${yen(r.sheetShip)}`;
+  $("mMaker").innerHTML=makerOptions(c.maker);
+  $("mState").value=c.status||"未請求";
+  $("mProduct").value=c.product||"";
+  $("mShipOut").value=c.shipOut||"";
+  $("mShipBack").value=c.shipBack||"";
+  $("mLaborExch").value=c.laborExch||"";
+  $("mLaborInst").value=c.laborInst||"";
+  $("mLaborCust").value=c.laborCust||"";
+  $("mOther").value=c.other||"";
+  $("mMemo").value=c.memo||"";
+  renderIntRows(); updateTotals();
+  $("modalBg").style.display="block";
+}
+function renderIntRows(){
+  const roles=Object.keys(SETTINGS.rates||{});
+  $("mIntBody").innerHTML=curInternal.map((row,i)=>`<tr>
+    <td><select data-i="${i}" data-f="kind"><option ${row.kind==="検品対応"?"selected":""}>検品対応</option><option ${row.kind==="現地対応"?"selected":""}>現地対応</option><option ${row.kind==="その他"?"selected":""}>その他</option></select></td>
+    <td><select data-i="${i}" data-f="role">${roles.map(x=>`<option ${x===row.role?"selected":""}>${esc(x)}</option>`).join("")}</select></td>
+    <td><input type="number" step="0.25" min="0" data-i="${i}" data-f="hours" value="${row.hours||""}"></td>
+    <td><input type="number" min="0" data-i="${i}" data-f="rate" value="${row.rate||""}"></td>
+    <td><input type="number" min="0" data-i="${i}" data-f="gas" value="${row.gas||""}"></td>
+    <td><input type="number" min="0" data-i="${i}" data-f="toll" value="${row.toll||""}"></td>
+    <td><input type="number" min="0" data-i="${i}" data-f="train" value="${row.train||""}"></td>
+    <td class="num" id="intSub${i}">${yen((+row.hours||0)*(+row.rate||0)+(+row.gas||0)+(+row.toll||0)+(+row.train||0))}</td>
+    <td><span class="del-x" data-del="${i}">✕</span></td>
+  </tr>`).join("");
+}
+function collectModal(){
+  const c=COSTS[curCid]||emptyCost();
+  return Object.assign({},c,{
+    maker:$("mMaker").value, status:$("mState").value,
+    product:+$("mProduct").value||0, shipOut:+$("mShipOut").value||0, shipBack:+$("mShipBack").value||0,
+    laborExch:+$("mLaborExch").value||0, laborInst:+$("mLaborInst").value||0, laborCust:+$("mLaborCust").value||0,
+    other:+$("mOther").value||0, memo:$("mMemo").value.trim(),
+    internal:curInternal.filter(r=>(+r.hours||0)||(+r.gas||0)||(+r.toll||0)||(+r.train||0))
+  });
+}
+function updateTotals(){
+  const t=costTotal(collectModal());
+  $("mTotals").innerHTML=`<span>製品代 ${yen(t.product)}</span><span>送料 ${yen(t.ship)}</span><span>工賃 ${yen(t.labor)}</span><span>社内工数 ${yen(t.internal)}</span><span>交通費 ${yen(t.trans)}</span><span>その他 ${yen(t.other)}</span><span style="font-size:14px">合計 ${yen(t.sum)}</span>`;
+}
+function closeModal(){ $("modalBg").style.display="none"; curCid=null; }
+
+/* ================= 請求集計 ================= */
+function billTargets(){
+  const from=$("bFrom").value, to=$("bTo").value, stf=$("bState").value;
+  return DATA.filter(r=>{
+    if(from && r.month && r.month<from) return false;
+    if(to && r.month && r.month>to) return false;
+    if((from||to) && !r.month) return false;
+    const st=caseState(r);
+    if(st==="未入力"||st==="対象外") return false;
+    if(stf && st!==stf) return false;
+    return true;
+  }).map(r=>({r, maker:resolveMaker(r)||"（未割当）", t:costTotal(COSTS[r.cid])})).filter(x=>x.t&&x.t.sum>0);
+}
+function renderBill(){
+  const items=billTargets();
+  const byMaker={};
+  items.forEach(x=>{ (byMaker[x.maker]=byMaker[x.maker]||[]).push(x); });
+  const makers=Object.keys(byMaker).sort((a,b)=>a.localeCompare(b,"ja"));
+  let g={n:0,product:0,ship:0,labor:0,internal:0,trans:0,other:0,sum:0};
+  $("billBody").innerHTML=makers.map(mk=>{
+    const xs=byMaker[mk];
+    const s=xs.reduce((a,x)=>{a.product+=x.t.product;a.ship+=x.t.ship;a.labor+=x.t.labor;a.internal+=x.t.internal;a.trans+=x.t.trans;a.other+=x.t.other;a.sum+=x.t.sum;return a;},{product:0,ship:0,labor:0,internal:0,trans:0,other:0,sum:0});
+    g.n+=xs.length;["product","ship","labor","internal","trans","other","sum"].forEach(k=>g[k]+=s[k]);
+    const mkEsc=esc(mk).replace(/'/g,"\\'");
+    return `<tr>
+      <td><b>${esc(mk)}</b></td><td class="num">${xs.length}</td>
+      <td class="num">${yen(s.product)}</td><td class="num">${yen(s.ship)}</td><td class="num">${yen(s.labor)}</td>
+      <td class="num">${yen(s.internal)}</td><td class="num">${yen(s.trans)}</td><td class="num">${yen(s.other)}</td>
+      <td class="num"><b>${yen(s.sum)}</b></td>
+      <td><button class="btn sm" onclick="invoiceXlsx('${mkEsc}')">請求書xlsx</button></td>
+      <td><button class="btn light sm" onclick="markBilled('${mkEsc}')">請求済にする</button></td>
+    </tr>`;
+  }).join("")+(makers.length?`<tr style="background:#f8fafc;font-weight:700"><td>合計</td><td class="num">${g.n}</td><td class="num">${yen(g.product)}</td><td class="num">${yen(g.ship)}</td><td class="num">${yen(g.labor)}</td><td class="num">${yen(g.internal)}</td><td class="num">${yen(g.trans)}</td><td class="num">${yen(g.other)}</td><td class="num">${yen(g.sum)}</td><td></td><td></td></tr>`:`<tr><td colspan="11" class="muted">対象データがありません。費用管理タブで費用を入力してください。</td></tr>`);
+  $("bCount").textContent=`対象 ${items.length} 件`;
+}
+function markBilled(maker){
+  const items=billTargets().filter(x=>x.maker===maker&&caseState(x.r)==="未請求");
+  if(!items.length){ alert("未請求の対象案件がありません。"); return; }
+  if(!confirm(`${maker} の未請求 ${items.length} 件を「請求済」にしますか？`)) return;
+  items.forEach(x=>{ const c=COSTS[x.r.cid]; if(c) c.status="請求済"; });
+  saveCosts(); renderAll();
+}
+function invoiceXlsx(maker){
+  const items=billTargets().filter(x=>x.maker===maker);
+  if(!items.length){ alert("対象案件がありません。"); return; }
+  const s=items.reduce((a,x)=>{a.product+=x.t.product;a.ship+=x.t.ship;a.labor+=x.t.labor;a.internal+=x.t.internal;a.trans+=x.t.trans;a.other+=x.t.other;a.sum+=x.t.sum;return a;},{product:0,ship:0,labor:0,internal:0,trans:0,other:0,sum:0});
+  const today=new Date().toLocaleDateString("ja-JP");
+  const period=($("bFrom").value||"最初")+" 〜 "+($("bTo").value||"最新");
+  const wb=XLSX.utils.book_new();
+  const cover=[
+    ["不具合対応費用 請求書"],[],
+    ["請求先", maker+" 御中"],["発行日", today],["対象期間", period],["対象件数", items.length+" 件"],[],
+    ["費目","金額（円）"],
+    ["① 製品代（代品）", s.product],
+    ["② 送料（発送・返送）", s.ship],
+    ["③ 工賃（交換・取付・客先請求分）", s.labor],
+    ["④ 社内対応工数", s.internal],
+    ["⑤ 交通費（ガソリン・高速・電車）", s.trans],
+    ["⑥ その他実費", s.other],
+    ["合計（税抜）", s.sum],[],
+    ["※ 明細は「明細」シートをご参照ください。"]
+  ];
+  const ws1=XLSX.utils.aoa_to_sheet(cover);
+  ws1["!cols"]=[{wch:34},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws1, "請求書");
+  const head=["受付日","車種","製品","報告者","症状","製品代","発送送料","返送送料","交換工賃","取付工賃","客先工賃","社内工数（内訳）","社内工数費","交通費","その他実費","合計","備考"];
+  const rows=items.map(x=>{
+    const c=COSTS[x.r.cid];
+    const det=(c.internal||[]).map(i=>`${i.kind||""} ${i.role||""} ${i.hours||0}h×${i.rate||0}円`).join(" / ");
+    return [x.r.dateStr, x.r.car, x.r.prodRaw||x.r.prod, x.r.name, x.r.syms.join("、"),
+      +c.product||0, +c.shipOut||0, +c.shipBack||0, +c.laborExch||0, +c.laborInst||0, +c.laborCust||0,
+      det, x.t.internal, x.t.trans, x.t.other, x.t.sum, c.memo||""];
+  });
+  rows.push(["合計","","","","",s.product,"","","","","","",s.internal,s.trans,s.other,s.sum,""]);
+  const ws2=XLSX.utils.aoa_to_sheet([head,...rows]);
+  ws2["!cols"]=head.map((h,i)=>({wch:i===2||i===11?26:(i===4||i===16?18:12)}));
+  XLSX.utils.book_append_sheet(wb, ws2, "明細");
+  XLSX.writeFile(wb, `請求書_${maker.replace(/[\\/:*?"<>|（）]/g,"")}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+/* ================= 設定 ================= */
+function renderSettings(){
+  const rt=$("rateTable").querySelector("tbody");
+  rt.innerHTML=Object.entries(SETTINGS.rates).map(([k,v],i)=>`<tr>
+    <td><input data-rk="${i}" value="${esc(k)}"></td>
+    <td><input type="number" min="0" data-rv="${i}" value="${v}"></td>
+    <td><span class="del-x" data-rdel="${esc(k)}">✕</span></td></tr>`).join("");
+  const mt=$("makerTable").querySelector("tbody");
+  mt.innerHTML=(SETTINGS.makers||[]).map((m,i)=>`<tr>
+    <td><input data-mi="${i}" value="${esc(m)}"></td>
+    <td><span class="del-x" data-mdel="${i}">✕</span></td></tr>`).join("");
+  const pt=$("mapTable").querySelector("tbody");
+  const mk=[...new Set([...(SETTINGS.makers||[])])];
+  pt.innerHTML=(SETTINGS.prodMap||[]).map((m,i)=>`<tr>
+    <td><input data-pk="${i}" value="${esc(m.kw)}" placeholder="例: ホイール"></td>
+    <td><select data-pv="${i}"><option value=""></option>${mk.map(x=>`<option ${x===m.maker?"selected":""}>${esc(x)}</option>`).join("")}</select></td>
+    <td><span class="del-x" data-pdel="${i}">✕</span></td></tr>`).join("");
+}
+function collectSettings(){
+  const rates={};
+  document.querySelectorAll("#rateTable [data-rk]").forEach(inp=>{
+    const i=inp.dataset.rk;
+    const v=document.querySelector(`#rateTable [data-rv="${i}"]`);
+    if(inp.value.trim()) rates[inp.value.trim()]=+v.value||0;
+  });
+  SETTINGS.rates=rates;
+  SETTINGS.makers=[...document.querySelectorAll("#makerTable [data-mi]")].map(i=>i.value.trim()).filter(Boolean);
+  SETTINGS.prodMap=[...document.querySelectorAll("#mapTable [data-pk]")].map(inp=>{
+    const i=inp.dataset.pk;
+    const sel=document.querySelector(`#mapTable [data-pv="${i}"]`);
+    return {kw:inp.value.trim(), maker:sel.value};
+  }).filter(m=>m.kw&&m.maker);
+  saveSettings();
+}
+
+/* ================= JSON書出・読込 ================= */
+function exportJson(){
+  const blob=new Blob([JSON.stringify({version:2, exported:new Date().toISOString(), settings:SETTINGS, costs:COSTS},null,1)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="費用データ_"+new Date().toISOString().slice(0,10)+".json";
+  a.click();
+}
+function importJson(text){
+  try{
+    const d=JSON.parse(text);
+    if(!d.costs&&!d.settings) throw new Error("形式が違います");
+    if(!confirm("費用データ・設定を読み込んだ内容で置き換えますか？")) return;
+    if(d.costs) COSTS=d.costs;
+    if(d.settings) SETTINGS=Object.assign(SETTINGS,d.settings);
+    saveCosts(); saveSettings(); renderAll();
+    alert("費用データを読み込みました。");
+  }catch(e){ alert("JSON読込エラー: "+e.message); }
+}
+
+/* ================= CSV出力（案件明細） ================= */
 function exportCsv(){
   const R=filtered();
-  const head=["受付日","ステータス","進捗詳細","車種","製品","症状","発生時期","実工数h","代品費用計","報告者","内容","リンク","写真URL"];
-  const lines=[head].concat(R.map(r=>[r.dateStr,r.st,r.stRaw,r.car,r.prodRaw||r.prod,r.syms.join("、"),r.when,r.hours||"",r.cost||"",r.name,r.note,r.link,r.photos.join(" ")]));
-  const csv="\ufeff"+lines.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\r\n");
+  const head=["受付日","ステータス","進捗詳細","製造業者","車種","製品","症状","発生時期","実工数h","製品代","送料","工賃","社内工数","交通費","その他","費用合計","請求状態","報告者","内容","写真URL"];
+  const lines=[head].concat(R.map(r=>{
+    const t=costTotal(COSTS[r.cid])||{product:0,ship:0,labor:0,internal:0,trans:0,other:0,sum:0};
+    return [r.dateStr,r.st,r.stRaw,resolveMaker(r),r.car,r.prodRaw||r.prod,r.syms.join("、"),r.when,r.hours||"",t.product||"",t.ship||"",t.labor||"",t.internal||"",t.trans||"",t.other||"",t.sum||"",caseState(r),r.name,r.note,r.photos.join(" ")];
+  }));
+  const csv="﻿"+lines.map(l=>l.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download="不具合報告_集計_"+new Date().toISOString().slice(0,10)+".csv";
+  a.download="不具合費用一覧_"+new Date().toISOString().slice(0,10)+".csv";
   a.click();
 }
 
-/* ================= 初期化 ================= */
+/* ================= タブ・初期化 ================= */
+function renderAll(){ fillFilters(); render(); renderCost(); renderBill(); renderSettings(); }
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  $("view-"+t.dataset.v).classList.add("active");
+  if(t.dataset.v==="dash") render();
+  if(t.dataset.v==="cost") renderCost();
+  if(t.dataset.v==="bill") renderBill();
+  if(t.dataset.v==="set") renderSettings();
+}));
 ["fFrom","fTo","fStatus","fCar","fProd","fSym"].forEach(id=>$(id).addEventListener("change",render));
 $("fText").addEventListener("input",()=>render());
 $("btnReset").addEventListener("click",()=>{["fFrom","fTo","fStatus","fCar","fProd","fSym"].forEach(id=>$(id).value="");$("fText").value="";render();});
+["cfMaker","cfState"].forEach(id=>$(id).addEventListener("change",renderCost));
+$("cfText").addEventListener("input",renderCost);
+["bFrom","bTo","bState"].forEach(id=>$(id).addEventListener("change",renderBill));
 $("btnLoad").addEventListener("click",()=>$("fileInput").click());
 $("fileInput").addEventListener("change",e=>{handleFile(e.target.files[0]);e.target.value="";});
 window.addEventListener("dragover",e=>e.preventDefault());
 window.addEventListener("drop",e=>{e.preventDefault();handleFile(e.dataTransfer.files[0]);});
-$("btnClear").addEventListener("click",()=>{if(confirm("このブラウザに保存されたデータを消去しますか？")){localStorage.removeItem(STORE_KEY);location.reload();}});
+$("btnClear").addEventListener("click",()=>{if(confirm("このブラウザに保存された案件データを消去しますか？（費用データは残ります）")){localStorage.removeItem(STORE_KEY);location.reload();}});
 $("btnCsv").addEventListener("click",exportCsv);
+$("btnExportJson").addEventListener("click",exportJson);
+$("btnImportJson").addEventListener("click",()=>$("jsonInput").click());
+$("jsonInput").addEventListener("change",async e=>{const f=e.target.files[0];if(f)importJson(await f.text());e.target.value="";});
+$("btnWipeCosts").addEventListener("click",()=>{if(confirm("費用データ（全案件の入力内容）を消去しますか？設定は残ります。")){COSTS={};saveCosts();renderAll();}});
+/* モーダル */
+$("mAddInt").addEventListener("click",()=>{const roles=Object.keys(SETTINGS.rates);const role=roles[0]||"";curInternal.push({kind:"検品対応",role,hours:"",rate:SETTINGS.rates[role]||0,gas:"",toll:"",train:""});renderIntRows();updateTotals();});
+$("mIntBody").addEventListener("input",e=>{
+  const el=e.target, i=+el.dataset.i, f=el.dataset.f;
+  if(f===undefined||isNaN(i)) return;
+  curInternal[i][f]=el.value;
+  if(f==="role"){const rate=SETTINGS.rates[el.value];if(rate!=null){curInternal[i].rate=rate;renderIntRows();}}
+  updateTotals();
+  const row=curInternal[i];
+  const sub=document.getElementById("intSub"+i);
+  if(sub) sub.textContent=yen((+row.hours||0)*(+row.rate||0)+(+row.gas||0)+(+row.toll||0)+(+row.train||0));
+});
+$("mIntBody").addEventListener("click",e=>{const d=e.target.dataset.del;if(d!==undefined){curInternal.splice(+d,1);renderIntRows();updateTotals();}});
+["mProduct","mShipOut","mShipBack","mLaborExch","mLaborInst","mLaborCust","mOther"].forEach(id=>$(id).addEventListener("input",updateTotals));
+$("mPrefill").addEventListener("click",()=>{const r=DATA.find(x=>x.cid===curCid);if(!r)return;if(r.sheetProduct)$("mProduct").value=r.sheetProduct;if(r.sheetShip)$("mShipOut").value=r.sheetShip;updateTotals();});
+$("mSave").addEventListener("click",()=>{COSTS[curCid]=collectModal();saveCosts();closeModal();renderAll();});
+$("mCancel").addEventListener("click",closeModal);
+$("mDelete").addEventListener("click",()=>{if(confirm("この案件の費用入力を削除しますか？")){delete COSTS[curCid];saveCosts();closeModal();renderAll();}});
+$("modalBg").addEventListener("click",e=>{if(e.target===$("modalBg"))closeModal();});
+/* 設定の編集反映 */
+["rateTable","makerTable","mapTable"].forEach(id=>{
+  $(id).addEventListener("change",()=>{collectSettings();renderCost();renderBill();});
+  $(id).addEventListener("click",e=>{
+    const d=e.target.dataset;
+    if(d.rdel!==undefined){delete SETTINGS.rates[d.rdel];saveSettings();renderSettings();}
+    if(d.mdel!==undefined){SETTINGS.makers.splice(+d.mdel,1);saveSettings();renderSettings();}
+    if(d.pdel!==undefined){SETTINGS.prodMap.splice(+d.pdel,1);saveSettings();renderSettings();}
+  });
+});
+$("addRate").addEventListener("click",()=>{SETTINGS.rates["新しい役割"+(Object.keys(SETTINGS.rates).length+1)]=0;saveSettings();renderSettings();});
+$("addMaker").addEventListener("click",()=>{SETTINGS.makers.push("");renderSettings();});
+$("addMap").addEventListener("click",()=>{SETTINGS.prodMap.push({kw:"",maker:""});renderSettings();});
+
+loadCostData();
 if(!restore()){
   $("banner").style.display="block";
-  $("banner").textContent="データ未読込です。Googleスプレッドシートから「ファイル → ダウンロード → Microsoft Excel (.xlsx)」で保存し、「データ読込」ボタンから選択するか、この画面にドラッグ＆ドロップしてください（写真リンクを含めるには .xlsx 推奨。CSVも可）。データはこのブラウザ内にのみ保存され、外部には送信されません。";
+  $("banner").textContent="案件データ未読込です。Googleスプレッドシートから「ファイル → ダウンロード → Microsoft Excel (.xlsx)」で保存し、「案件データ読込」ボタンから選択するか、この画面にドラッグ＆ドロップしてください。データはこのブラウザ内にのみ保存され、外部には送信されません。";
   $("srcNote").textContent="データ未読込";
 }
-fillFilters(); render();
+renderAll();
 </script>
 </body>
 </html>
