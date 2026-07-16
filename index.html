@@ -277,8 +277,6 @@ td a:hover{text-decoration:underline;}
     </div>
     <div class="sec-h">③ 工賃</div>
     <div class="fgrid">
-      <div><label>交換工賃（円）</label><input type="number" id="mLaborExch" min="0"></div>
-      <div><label>取付工賃（円）</label><input type="number" id="mLaborInst" min="0"></div>
       <div><label>客先から請求された工賃（円）</label><input type="number" id="mLaborCust" min="0"></div>
     </div>
     <div class="sec-h">④ 社内対応工数・交通費</div>
@@ -774,8 +772,6 @@ function openCostModal(cid){
   $("mProduct").value=c.product||"";
   $("mShipOut").value=c.shipOut||"";
   $("mShipBack").value=c.shipBack||"";
-  $("mLaborExch").value=c.laborExch||"";
-  $("mLaborInst").value=c.laborInst||"";
   $("mLaborCust").value=c.laborCust||"";
   $("mOther").value=c.other||"";
   $("mMemo").value=c.memo||"";
@@ -812,7 +808,7 @@ function collectModal(){
   return Object.assign({},c,{
     maker:$("mMaker").value, status:$("mState").value,
     product:+$("mProduct").value||0, shipOut:+$("mShipOut").value||0, shipBack:+$("mShipBack").value||0,
-    laborExch:+$("mLaborExch").value||0, laborInst:+$("mLaborInst").value||0, laborCust:+$("mLaborCust").value||0,
+    laborCust:+$("mLaborCust").value||0,
     other:+$("mOther").value||0, memo:$("mMemo").value.trim(),
     internal:curInternal.filter(r=>(+r.hours||0)||(+r.gas||0)||(+r.toll||0)||(+r.train||0)),
     stOverride:$("mStatus2").value,
@@ -890,15 +886,15 @@ function invoiceXlsx(maker){
   const ws1=XLSX.utils.aoa_to_sheet(cover);
   ws1["!cols"]=[{wch:34},{wch:16}];
   XLSX.utils.book_append_sheet(wb, ws1, "請求書");
-  const head=["受付日","車種","製品","報告者","症状","代品（品名/部品番号）","製品代","発送送料","返送送料","交換工賃","取付工賃","客先工賃","社内工数（内訳）","社内工数費","交通費","その他実費","合計","備考"];
+  const head=["受付日","車種","製品","報告者","症状","代品（品名/部品番号）","製品代","発送送料","返送送料","工賃（客先請求）","社内工数（内訳）","社内工数費","交通費","その他実費","合計","備考"];
   const rows=items.map(x=>{
     const c=COSTS[x.r.cid];
     const det=(c.internal||[]).map(i=>`${i.kind||""} ${i.role||""} ${i.hours||0}h×${i.rate||0}円`).join(" / ");
     return [x.r.dateStr, x.r.car, x.r.prodRaw||x.r.prod, x.r.name, x.r.syms.join("、"), itemsStr(x.r),
-      +c.product||0, +c.shipOut||0, +c.shipBack||0, +c.laborExch||0, +c.laborInst||0, +c.laborCust||0,
+      +c.product||0, +c.shipOut||0, +c.shipBack||0, x.t.labor,
       det, x.t.internal, x.t.trans, x.t.other, x.t.sum, c.memo||""];
   });
-  rows.push(["合計","","","","","",s.product,"","","","","","",s.internal,s.trans,s.other,s.sum,""]);
+  rows.push(["合計","","","","","",s.product,s.ship,"",s.labor,"",s.internal,s.trans,s.other,s.sum,""]);
   const ws2=XLSX.utils.aoa_to_sheet([head,...rows]);
   ws2["!cols"]=head.map((h,i)=>({wch:i===2||i===11?26:(i===4||i===16?18:12)}));
   XLSX.utils.book_append_sheet(wb, ws2, "明細");
@@ -1021,7 +1017,7 @@ $("mIntBody").addEventListener("input",e=>{
   if(sub) sub.textContent=yen((+row.hours||0)*(+row.rate||0)+(+row.gas||0)+(+row.toll||0)+(+row.train||0));
 });
 $("mIntBody").addEventListener("click",e=>{const d=e.target.dataset.del;if(d!==undefined){curInternal.splice(+d,1);renderIntRows();updateTotals();}});
-["mProduct","mShipOut","mShipBack","mLaborExch","mLaborInst","mLaborCust","mOther"].forEach(id=>$(id).addEventListener("input",updateTotals));
+["mProduct","mShipOut","mShipBack","mLaborCust","mOther"].forEach(id=>$(id).addEventListener("input",updateTotals));
 $("mPrefill").addEventListener("click",()=>{const r=DATA.find(x=>x.cid===curCid);if(!r)return;if(r.sheetProduct)$("mProduct").value=r.sheetProduct;if(r.sheetShip)$("mShipOut").value=r.sheetShip;updateTotals();});
 $("mSave").addEventListener("click",()=>{const r=DATA.find(x=>x.cid===curCid);const c=collectModal();COSTS[curCid]=c;saveCosts();closeModal();renderAll();if(c.stOverride||(c.items||[]).length)writeBack(r,c);});
 $("mCancel").addEventListener("click",closeModal);
