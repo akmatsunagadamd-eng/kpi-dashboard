@@ -229,7 +229,7 @@ td a:hover{text-decoration:underline;}
   </div>
   <div class="panel">
     <h3>スプレッドシートへの書き戻し（Apps Script連携）</h3>
-    <div class="muted" style="margin-bottom:8px">設定すると、案件編集の保存時にステータスを「進捗」列へ、代品明細をZ列へ自動反映します。シート側で一度だけApps Scriptウェブアプリのデプロイが必要です（配布の「シート書き戻し設定手順」参照）。空欄の場合は書き戻しを行いません（ローカル保存のみ）。</div>
+    <div class="muted" style="margin-bottom:8px">設定すると、①保存時にステータスを「進捗」列へ・代品明細をZ列へ自動反映、②費用データ・設定をシート内「費用データ」シートに保存し、どのPCから開いても自動で同期されます。シート側で一度だけApps Scriptウェブアプリのデプロイが必要です（配布の「シート書き戻し設定手順」参照）。空欄の場合はこのブラウザ内のみの保存になります。</div>
     <div class="fgrid">
       <div style="grid-column:span 2"><label>ウェブアプリURL（https://script.google.com/macros/s/…/exec）</label><input id="setGasUrl" placeholder="未設定（書き戻し無効）"></div>
       <div><label>共有キー（Apps Script側のTOKENと同じ値）</label><input id="setGasToken"></div>
@@ -540,25 +540,59 @@ async function loadFromSheet(silent){
 }
 
 /* ================= スプレッドシートへの書き戻し（Apps Script連携） ================= */
+async function gasPost(payload){
+  payload.token=SETTINGS.gasToken||"";
+  const res=await fetch(SETTINGS.gasUrl,{method:"POST",body:JSON.stringify(payload)});
+  const d=await res.json();
+  if(!d.ok) throw new Error(d.error||"不明なエラー");
+  return d;
+}
 async function writeBack(r,c){
   if(!SETTINGS.gasUrl||!r) return;
-  $("srcNote").textContent="シートへ書き戻し中…";
+  $("srcNote").textContent="シートへ保存中…";
   try{
-    const res=await fetch(SETTINGS.gasUrl,{method:"POST",body:JSON.stringify({
-      token:SETTINGS.gasToken||"",
+    const d=await gasPost({
+      action:"save",
+      cid:r.cid, json:c,
       row:r.rowNum||0,
       ts:r.tsRaw||r.dateStr,
       name:(r.name||"").split(" / ")[0],
       status:c.stOverride||"",
       items:(c.items||[]).map(i=>(i.name||"")+(i.part?`(${i.part})`:"")+((+i.qty||1)>1?`×${i.qty}`:"")).join("、")
-    })});
-    const d=await res.json();
-    if(d.ok){ $("srcNote").textContent=`シート書き戻し完了（行${d.row}・${new Date().toLocaleTimeString("ja-JP")}）`; }
-    else throw new Error(d.error||"不明なエラー");
+    });
+    $("srcNote").textContent=`シート保存完了（${new Date().toLocaleTimeString("ja-JP")}・全PCに共有されます）`;
   }catch(e){
-    $("srcNote").textContent="シート書き戻し失敗（ローカルには保存済み）";
-    alert("スプレッドシートへの書き戻しに失敗しました:\n"+e.message+"\n\n入力はこのブラウザに保存されています。設定タブのウェブアプリURL・共有キーを確認してください。");
+    $("srcNote").textContent="シート保存失敗（このブラウザには保存済み）";
+    alert("スプレッドシートへの保存に失敗しました:\n"+e.message+"\n\n入力はこのブラウザに保存されています。設定タブのウェブアプリURL・共有キーを確認してください。");
   }
+}
+/* 起動時にシートから費用データ・設定を取得（全PC同期） */
+async function syncLoad(){
+  if(!SETTINGS.gasUrl) return;
+  try{
+    const res=await fetch(SETTINGS.gasUrl+"?token="+encodeURIComponent(SETTINGS.gasToken||""),{method:"GET"});
+    const d=await res.json();
+    if(!d.ok) throw new Error(d.error||"");
+    if(d.costs) COSTS=d.costs;
+    if(d.settings){
+      const url=SETTINGS.gasUrl, tk=SETTINGS.gasToken;
+      SETTINGS=Object.assign(SETTINGS,d.settings);
+      SETTINGS.gasUrl=url; SETTINGS.gasToken=tk;
+    }
+    saveCosts(); localStorage.setItem(SET_KEY,JSON.stringify(SETTINGS));
+    renderAll();
+    $("srcNote").textContent+="　✓費用データ同期済み";
+  }catch(e){
+    $("srcNote").textContent+="　⚠費用データ同期失敗（ローカル表示）";
+  }
+}
+let _setPushTimer=null;
+function pushSettings(){
+  if(!SETTINGS.gasUrl) return;
+  clearTimeout(_setPushTimer);
+  _setPushTimer=setTimeout(async()=>{
+    try{ await gasPost({action:"saveSettings", json:{rates:SETTINGS.rates, makers:SETTINGS.makers, prodMap:SETTINGS.prodMap}}); }catch(e){}
+  },1200);
 }
 
 /* ================= 費用・設定データ ================= */
@@ -569,7 +603,7 @@ function loadCostData(){
   try{ const s=JSON.parse(localStorage.getItem(SET_KEY)||"null"); if(s) SETTINGS=Object.assign(SETTINGS,s); }catch(e){}
 }
 function saveCosts(){ try{ localStorage.setItem(COST_KEY, JSON.stringify(COSTS)); }catch(e){alert("保存に失敗: "+e.message);} }
-function saveSettings(){ try{ localStorage.setItem(SET_KEY, JSON.stringify(SETTINGS)); }catch(e){} }
+function saveSettings(){ try{ localStorage.setItem(SET_KEY, JSON.stringify(SETTINGS)); }catch(e){} if(typeof pushSettings==="function") pushSettings(); }
 function emptyCost(){ return {maker:"", status:"未請求", product:0, shipOut:0, shipBack:0, laborExch:0, laborInst:0, laborCust:0, other:0, memo:"", internal:[]}; }
 function costTotal(c){
   if(!c) return null;
@@ -1000,7 +1034,7 @@ $("btnCsv").addEventListener("click",exportCsv);
 $("btnExportJson").addEventListener("click",exportJson);
 $("btnImportJson").addEventListener("click",()=>$("jsonInput").click());
 $("jsonInput").addEventListener("change",async e=>{const f=e.target.files[0];if(f)importJson(await f.text());e.target.value="";});
-$("btnWipeCosts").addEventListener("click",()=>{if(confirm("費用データ（全案件の入力内容）を消去しますか？設定は残ります。")){COSTS={};saveCosts();renderAll();}});
+$("btnWipeCosts").addEventListener("click",()=>{if(confirm("費用データ（全案件の入力内容）を消去しますか？設定は残ります。"+(SETTINGS.gasUrl?"\n※スプレッドシート側の費用データも消去されます。":""))){COSTS={};saveCosts();renderAll();if(SETTINGS.gasUrl){gasPost({action:"wipeCosts"}).catch(()=>{});}}});
 /* モーダル */
 $("mAddItem").addEventListener("click",()=>{curItems.push({name:"",part:"",qty:1,note:""});renderItemRows();});
 $("mItemBody").addEventListener("input",e=>{const i=+e.target.dataset.i,f=e.target.dataset.f;if(f===undefined||isNaN(i))return;curItems[i][f]=e.target.value;});
@@ -1019,9 +1053,9 @@ $("mIntBody").addEventListener("input",e=>{
 $("mIntBody").addEventListener("click",e=>{const d=e.target.dataset.del;if(d!==undefined){curInternal.splice(+d,1);renderIntRows();updateTotals();}});
 ["mProduct","mShipOut","mShipBack","mLaborCust","mOther"].forEach(id=>$(id).addEventListener("input",updateTotals));
 $("mPrefill").addEventListener("click",()=>{const r=DATA.find(x=>x.cid===curCid);if(!r)return;if(r.sheetProduct)$("mProduct").value=r.sheetProduct;if(r.sheetShip)$("mShipOut").value=r.sheetShip;updateTotals();});
-$("mSave").addEventListener("click",()=>{const r=DATA.find(x=>x.cid===curCid);const c=collectModal();COSTS[curCid]=c;saveCosts();closeModal();renderAll();if(c.stOverride||(c.items||[]).length)writeBack(r,c);});
+$("mSave").addEventListener("click",()=>{const r=DATA.find(x=>x.cid===curCid);const c=collectModal();COSTS[curCid]=c;saveCosts();closeModal();renderAll();writeBack(r,c);});
 $("mCancel").addEventListener("click",closeModal);
-$("mDelete").addEventListener("click",()=>{if(confirm("この案件の入力（費用・代品・ステータス上書き）を削除しますか？")){delete COSTS[curCid];saveCosts();closeModal();renderAll();}});
+$("mDelete").addEventListener("click",()=>{if(confirm("この案件の入力（費用・代品・ステータス上書き）を削除しますか？")){const cid=curCid;delete COSTS[cid];saveCosts();closeModal();renderAll();if(SETTINGS.gasUrl){gasPost({action:"delete",cid}).catch(()=>{});}}});
 $("modalBg").addEventListener("click",e=>{if(e.target===$("modalBg"))closeModal();});
 /* 設定の編集反映 */
 ["rateTable","makerTable","mapTable"].forEach(id=>{
@@ -1042,6 +1076,7 @@ loadCostData();
 restore();
 renderAll();
 loadFromSheet(true); /* 起動時にスプレッドシートから自動取得（失敗時は保存データ/ファイル読込で継続） */
+syncLoad(); /* 費用データ・設定もシートから自動同期 */
 </script>
 </body>
 </html>
